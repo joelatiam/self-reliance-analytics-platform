@@ -7,12 +7,19 @@ data that settled five minutes earlier and never races a half-written batch.
 The pull itself is incremental — each resource resumes from its own stored
 watermark — so a ten-minute cadence carries only what actually changed rather
 than re-reading the whole caseload.
+
+That watermark is global rather than per-interval, and the source serves current
+state only, so this DAG cannot be backfilled: a past interval has no history to
+reconstruct. catchup is off, and a run whose interval has already passed skips
+rather than quietly fetching nothing. See docs/design_report.md for the fix that
+would make it backfillable.
 """
 from __future__ import annotations
 
 import sys
 
 from airflow import DAG
+from airflow.exceptions import AirflowSkipException
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
@@ -40,7 +47,19 @@ DBT_SELECTORS = (
 )
 
 
-def run_client_activity_ingestion() -> None:
+def run_client_activity_ingestion(**context) -> None:
+    """Pull whatever has changed since the last run, unless this is a replay.
+
+    The pull resumes from a stored watermark rather than from this run's
+    interval, so a backfilled or cleared run would read "everything since now",
+    find nothing, and report success. Skip loudly instead.
+    """
+    import run_window
+
+    data_interval_end = context.get("data_interval_end")
+    if run_window.is_stale_run(data_interval_end):
+        raise AirflowSkipException(run_window.describe_stale_run(data_interval_end))
+
     import main as ingestion_main
 
     ingestion_main.run_client_activity()

@@ -6,7 +6,9 @@ Pulls data from three REST APIs into Postgres (the OLTP layer Debezium replicate
 - [UNHCR Refugee Population Statistics API](https://api.unhcr.org/population/v1/population/) — yearly displacement stats per host country
 - [Clients API](../clients-api/README.md) — operational client activity (clients, businesses, loans, repayments, advisory sessions, monthly business metrics). **Generated data**, served by a source system in this repo; see the root README's data-sources section.
 
-The first two are yearly country aggregates and get re-read in full each run — they are small and change at most annually. The third is row-level and changes continuously, so it is pulled **incrementally**: each resource has its own watermark in `ingestion_watermarks`, the client asks the API for everything with `updated_at` greater than it, and the watermark advances to the newest row actually stored. An empty run leaves the mark untouched, so a crash mid-page resumes rather than skipping.
+The first two are yearly country aggregates and get re-read in full each run — they are small and change at most annually. The third is row-level and changes continuously, so it is pulled **incrementally**: each resource has its own watermark in `ingestion_watermarks`, the client asks the API for everything with `updated_at` greater than it, and the watermark advances to the newest row actually stored. An empty run leaves the mark untouched, so a crash mid-page resumes rather than skipping, and the mark only ever moves forward so an out-of-order run cannot rewind it.
+
+Because that mark is global rather than per-interval, and the clients API serves current state only, **this pull cannot be backfilled** — a past interval has no history left to reconstruct. The DAG skips a run whose interval has already passed instead of reporting success on an empty fetch. The design report's limitations section covers what would make it backfillable.
 
 ## Layout
 
