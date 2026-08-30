@@ -8,7 +8,7 @@ x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: apps/orchestration/Dockerfile
-  environment:
+  environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: SequentialExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -34,6 +34,7 @@ x-airflow-common: &airflow-common
     - ./apps/orchestration/dags:/opt/airflow/dags
     - ./apps/ingestion:/opt/airflow/ingestion
     - ./apps/transformation:/opt/airflow/dbt
+    - ./apps/warehouse/init:/opt/airflow/warehouse:ro
     - airflow-state:/opt/airflow
   depends_on:
     postgres:
@@ -79,6 +80,9 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       CLUSTER_ID: "wbpipeline-kraft-cluster-1"
+      # Left to itself the JVM sizes its heap off the Docker VM's RAM, which is
+      # far more than this workload needs and starves ClickHouse next door.
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports:
       - "29092:29092"
     healthcheck:
@@ -108,6 +112,7 @@ services:
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports:
       - "8083:8083"
     healthcheck:
@@ -144,10 +149,12 @@ services:
       - "8123:8123"
       - "9000:9000"
       - "9363:9363"
+    mem_limit: 1400m
     volumes:
       - ch-data:/var/lib/clickhouse
       - ./apps/warehouse/init:/docker-entrypoint-initdb.d
       - ./apps/warehouse/config/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml
+      - ./apps/warehouse/config/memory.xml:/etc/clickhouse-server/config.d/memory.xml
     healthcheck:
       test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
       interval: 5s
@@ -169,6 +176,14 @@ services:
     <<: *airflow-common
     container_name: wb-airflow-webserver
     command: webserver
+    environment:
+      <<: *airflow-common-env
+      # Each gunicorn worker loads the whole DAG bag. Four of them reached
+      # 1.4 GB here and OOM-killed ClickHouse and Kafka Connect; two is ample
+      # for a single-user local UI and holds it near the 704m that
+      # deploy/compose.prod.yml already proved sufficient on the droplet.
+      AIRFLOW__WEBSERVER__WORKERS: "2"
+    mem_limit: 900m
     ports:
       - "8080:8080"
     depends_on:

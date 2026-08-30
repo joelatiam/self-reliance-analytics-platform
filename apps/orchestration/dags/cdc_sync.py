@@ -12,6 +12,7 @@ import time
 
 import psycopg2
 import requests
+from warehouse_schema import ensure_warehouse_schema
 
 CDC_SYNC_MAX_ATTEMPTS = 10
 CDC_SYNC_POLL_SECONDS = 6
@@ -55,6 +56,10 @@ def wait_for_cdc_sync(
     poll_seconds: int = CDC_SYNC_POLL_SECONDS,
 ) -> None:
     """Poll until ClickHouse has caught up with Postgres, or proceed anyway."""
+    # The tables counted below may post-date the ClickHouse volume; creating
+    # them here is what keeps a 404 from failing the run.
+    ensure_warehouse_schema()
+
     targets = {table: postgres_row_count(table) for table in tables}
     for attempt in range(1, max_attempts + 1):
         current = {table: clickhouse_row_count(table) for table in tables}

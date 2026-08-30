@@ -33,10 +33,12 @@ Each app has its own README with details specific to it:
 
 ## Dependencies
 
-- Docker + Docker Compose v2, with **at least 6 GB of memory** allocated to the
-  Docker VM. The stack runs Kafka, ClickHouse, Airflow and Postgres side by
-  side; on a 4 GB default allocation the Kafka and ClickHouse containers get
-  OOM-killed (exit code 137) shortly after boot.
+- Docker + Docker Compose v2. The stack is tuned to run in a **4 GB Docker VM**,
+  which is the default allocation: the JVM services get explicit heap settings,
+  ClickHouse is held to a memory ceiling, and the Airflow webserver runs two
+  gunicorn workers rather than four. Left uncapped those three between them
+  claim more than the VM has, and the kernel OOM-kills whichever container asks
+  next (exit code 137). Measured with everything running: ~2.5 GB.
 - Nothing else — all app dependencies (Python, dbt, Airflow, etc.) are installed inside the containers.
 
 ## Run it end-to-end
