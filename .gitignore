@@ -7,6 +7,10 @@ venv/
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
+apps/transformation/target/
+apps/transformation/dbt_packages/
+apps/transformation/logs/
+apps/transformation/.user.yml
 
 airflow/logs/
 airflow/plugins/
