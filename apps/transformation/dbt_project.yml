@@ -1,0 +1,15 @@
+name: worldbank_indicators
+version: "1.0.0"
+config-version: 2
+profile: worldbank_indicators
+
+model-paths: ["models"]
+test-paths: ["tests"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  worldbank_indicators:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

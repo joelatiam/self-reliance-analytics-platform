@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: cdc_raw
+    schema: "{{ env_var('CLICKHOUSE_DB', 'worldbank') }}"
+    tables:
+      - name: raw_countries
+      - name: raw_indicators
+      - name: raw_observations

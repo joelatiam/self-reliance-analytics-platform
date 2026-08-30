@@ -1,0 +1,12 @@
+worldbank_indicators:
+  target: dev
+  outputs:
+    dev:
+      type: clickhouse
+      schema: "{{ env_var('CLICKHOUSE_DB', 'worldbank') }}"
+      host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
+      port: "{{ env_var('CLICKHOUSE_HTTP_PORT', '8123') | as_number }}"
+      user: "{{ env_var('CLICKHOUSE_USER', 'default') }}"
+      password: "{{ env_var('CLICKHOUSE_PASSWORD', '') }}"
+      secure: false
+      threads: 2
