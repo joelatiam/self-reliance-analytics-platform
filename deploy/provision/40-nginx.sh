@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
-# nginx: shared proxy snippet, catch-all default, per-app vhost helper.
+# nginx: shared proxy snippet, friendly "unavailable" page, catch-all default,
+# and the app-site helper that scaffolds one vhost per subdomain.
 set -euo pipefail
 
 DOMAIN=${DOMAIN:-example.com}
+ERR_ROOT=/var/www/errors
 
 echo "==> nginx can traverse the app root (static sites)"
 setfacl -R -m u:www-data:rX -m d:u:www-data:rX /var/www/production
+
+echo "==> unavailable page"
+install -d -o root -g root -m 755 "$ERR_ROOT"
+install -m 644 "$(dirname "$0")/nginx/unavailable.html" "$ERR_ROOT/unavailable.html"
 
 echo "==> shared proxy snippet"
 cat > /etc/nginx/snippets/app-proxy.conf <<'SNIP'
@@ -20,51 +26,39 @@ proxy_read_timeout 300s;
 proxy_connect_timeout 15s;
 SNIP
 
-echo "==> catch-all default: bare IP and unknown hosts get nothing"
+# proxy_intercept_errors stays OFF on purpose: we want to catch nginx's own
+# "cannot reach upstream" 502/504, not swallow a 502 the application itself
+# returned. Masking real app errors behind a friendly page would hide bugs.
+cat > /etc/nginx/snippets/app-errors.conf <<'SNIP'
+error_page 502 503 504 /_unavailable.html;
+
+location = /_unavailable.html {
+    root /var/www/errors;
+    rewrite ^ /unavailable.html break;
+    internal;
+}
+SNIP
+
+echo "==> catch-all default: unknown hosts get the unavailable page, not a hang"
 rm -f /etc/nginx/sites-enabled/default
 cat > /etc/nginx/sites-available/000-catchall.conf <<'CATCH'
+# Wildcard DNS means any unconfigured subdomain lands here. Serving the
+# unavailable page beats dropping the connection: a reviewer hitting a typo'd
+# or not-yet-deployed address sees an explanation instead of a browser timeout.
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
-    # Drop the connection: no app should be reachable by IP or wrong hostname.
-    return 444;
+
+    root /var/www/errors;
+    location = /unavailable.html { internal; }
+    location / { return 503; }
+    error_page 503 /unavailable.html;
 }
 CATCH
 ln -sf /etc/nginx/sites-available/000-catchall.conf /etc/nginx/sites-enabled/
 
-echo "==> app-site: scaffold a subdomain vhost -> local port"
-cat > /usr/local/bin/app-site <<'SITE'
-#!/usr/bin/env bash
-# app-site <subdomain> <local-port> — create + enable a vhost, then reload.
-set -euo pipefail
-DOMAIN=${DOMAIN:-example.com}
-name=${1:?usage: app-site <subdomain> <local-port>}
-port=${2:?usage: app-site <subdomain> <local-port>}
-[[ $name =~ ^[a-z0-9-]+$ ]] || { echo "bad subdomain: $name" >&2; exit 2; }
-[[ $port =~ ^[0-9]+$   ]] || { echo "bad port: $port"      >&2; exit 2; }
-
-cat > "/etc/nginx/sites-available/${name}.conf" <<VHOST
-server {
-    listen 80;
-    listen [::]:80;
-    server_name ${name}.${DOMAIN};
-
-    access_log /var/log/nginx/${name}.access.log;
-    error_log  /var/log/nginx/${name}.error.log;
-
-    location / {
-        proxy_pass http://127.0.0.1:${port};
-        include snippets/app-proxy.conf;
-    }
-}
-VHOST
-ln -sf "/etc/nginx/sites-available/${name}.conf" /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
-echo "enabled ${name}.${DOMAIN} -> 127.0.0.1:${port}"
-echo "TLS:  certbot --nginx -d ${name}.${DOMAIN}"
-SITE
-chmod 755 /usr/local/bin/app-site
+install -m 755 "$(dirname "$0")/app-site" /usr/local/bin/app-site
 
 nginx -t && systemctl reload nginx
 echo "==> nginx done (domain: ${DOMAIN})"

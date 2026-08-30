@@ -51,9 +51,37 @@ Subdomains, each an nginx vhost with its own Let's Encrypt certificate:
 | `api.example.com`     | `127.0.0.1:4000` | clients-api (simulated source system) |
 | `airflow.example.com` | `127.0.0.1:8080` | Airflow UI |
 | `grafana.example.com` | `127.0.0.1:3000` | Grafana dashboards |
+| `bi.example.com`      | — | reserved; no application deployed behind it yet |
 
-Add another with `sudo app-site <subdomain> <port>`, then
-`sudo certbot --nginx -d <subdomain>.example.com`.
+When an upstream cannot be reached — service stopped, mid-restart, or never
+deployed — the vhost serves a plain "this application isn't available" page
+instead of nginx's default error or a browser timeout. The same page answers any
+unconfigured subdomain, which matters with a wildcard A record: a typo'd address
+gets an explanation rather than a hang.
+
+`proxy_intercept_errors` is deliberately left off, so a 502 the *application*
+returns still reaches the client. Only nginx's own "upstream unreachable" errors
+are replaced; masking real application errors behind a friendly page would hide
+bugs.
+
+Add another app, or reserve an address for one that does not exist yet:
+
+```bash
+sudo app-site reports 8090   # proxy to a local port
+sudo app-site reports        # placeholder, serves the unavailable page
+```
+
+Then issue certificates. This is a human-run step, not automation: it registers
+an ACME account against your email and accepts the Let's Encrypt subscriber
+agreement. It waits for DNS to propagate before trying, so it can be run
+immediately after adding the records.
+
+```bash
+sudo app-tls you@example.com                # all four
+sudo app-tls you@example.com reports        # just one
+```
+
+Renewal is handled by `certbot.timer`, already enabled.
 
 Prometheus (9090), ClickHouse (8123/9000), Kafka (29092), Kafka Connect (8083)
 and both Postgres instances stay loopback-only. Reach them over an SSH tunnel:

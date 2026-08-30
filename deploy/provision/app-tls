@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# app-tls <email> [subdomain ...] — wait for DNS, then issue Let's Encrypt
+# certificates for each subdomain and switch its vhost to HTTPS.
+#
+# Run by a human, not by automation: obtaining a certificate registers an ACME
+# account against your email and accepts the Let's Encrypt subscriber agreement.
+# That is your call to make, not a script's.
+#
+#   sudo app-tls you@example.com
+#   sudo app-tls you@example.com api airflow      # just these two
+set -euo pipefail
+
+DOMAIN=${DOMAIN:-example.com}
+EMAIL=${1:?usage: app-tls <email> [subdomain ...]}
+shift || true
+SUBS=("$@")
+[ ${#SUBS[@]} -eq 0 ] && SUBS=(api airflow grafana bi)
+
+IP=$(curl -fsS --max-time 10 https://api.ipify.org || echo "")
+echo "This host's public IP: ${IP:-unknown}"
+
+echo "==> waiting for DNS (up to 30 min)"
+DEADLINE=$(( $(date +%s) + 1800 ))
+PENDING=("${SUBS[@]}")
+while [ ${#PENDING[@]} -gt 0 ]; do
+  STILL=()
+  for s in "${PENDING[@]}"; do
+    GOT=$(dig +short @1.1.1.1 "${s}.${DOMAIN}" A | tail -1)
+    if [ -n "$GOT" ] && { [ -z "$IP" ] || [ "$GOT" = "$IP" ]; }; then
+      echo "    ${s}.${DOMAIN} -> $GOT"
+    else
+      STILL+=("$s")
+    fi
+  done
+  PENDING=("${STILL[@]}")
+  [ ${#PENDING[@]} -eq 0 ] && break
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    echo "!! still unresolved after 30 min: ${PENDING[*]}" >&2
+    echo "   Check the A records at your registrar, then re-run." >&2
+    exit 1
+  fi
+  sleep 30
+done
+
+# One certificate per name rather than one SAN cert covering all four: an app
+# can then be added or removed without reissuing everyone else's certificate.
+FAILED=()
+for s in "${SUBS[@]}"; do
+  echo "==> certificate for ${s}.${DOMAIN}"
+  if certbot --nginx --non-interactive --agree-tos -m "$EMAIL" \
+       --redirect --keep-until-expiring -d "${s}.${DOMAIN}"; then
+    echo "    ok"
+  else
+    echo "    FAILED for ${s}.${DOMAIN}" >&2
+    FAILED+=("$s")
+  fi
+done
+
+nginx -t && systemctl reload nginx
+echo "==> renewal timer: $(systemctl is-enabled certbot.timer 2>/dev/null || echo 'not enabled')"
+certbot certificates 2>/dev/null | grep -E "Certificate Name|Expiry Date" | sed 's/^/    /'
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+  echo "!! failed: ${FAILED[*]}" >&2
+  exit 1
+fi
+echo "==> all certificates issued"
