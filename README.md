@@ -1,6 +1,6 @@
-# World Bank Indicators Pipeline
+# Self-Reliance Analytics Platform
 
-An end-to-end analytics engineering pipeline: World Bank REST API → Postgres → Debezium CDC → ClickHouse → dbt → Airflow, with Prometheus/Grafana observability and GitHub Actions CI/CD. Built as a take-home assessment for Inkomoko's Senior Data Engineer role.
+An end-to-end analytics engineering pipeline: World Bank REST API → Postgres → Debezium CDC → ClickHouse → dbt → Airflow, with Prometheus/Grafana observability and GitHub Actions CI/CD. Built as a take-home assessment for a Senior Data Engineer role.
 
 See [`docs/design_report.md`](docs/design_report.md) for architecture, data model/ERD, ClickHouse design rationale, observability design, and scaling notes.
 
@@ -83,7 +83,7 @@ If Postgres and ClickHouse row counts (step 1 vs step 3) match, replication is c
 https://api.worldbank.org/v2/country/RW/indicator/NY.GDP.MKTP.KD.ZG?format=json&date=2018:2023
 ```
 
-Countries and indicators pulled are configured via `.env` (`WORLD_BANK_COUNTRIES`, `WORLD_BANK_INDICATORS`) — defaults to Inkomoko's five operating countries (Rwanda, Kenya, Ethiopia, South Sudan, Chad) and four economic/financial-inclusion indicators (GDP growth, unemployment, poverty headcount, account ownership).
+Countries and indicators pulled are configured via `.env` (`WORLD_BANK_COUNTRIES`, `WORLD_BANK_INDICATORS`) — defaults to the program's five operating countries (Rwanda, Kenya, Ethiopia, South Sudan, Chad) and four economic/financial-inclusion indicators (GDP growth, unemployment, poverty headcount, account ownership).
 
 **[UNHCR Refugee Population Statistics API](https://api.unhcr.org/population/v1/population/)** — also no authentication required. Pulls yearly displacement data (refugees, asylum seekers, IDPs, stateless persons) hosted by each of the same five countries:
 
