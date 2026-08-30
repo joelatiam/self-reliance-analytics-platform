@@ -1,0 +1,43 @@
+# Metabase for bi.joelatiam.com. Kept in a separate file, not merged into the
+# production override, because it is optional and memory-hungry:
+#
+#   docker compose -f docker-compose.yml -f deploy/compose.prod.yml \
+#                  -f deploy/compose.bi.yml up -d metabase
+#
+# REQUIRES more RAM than the 4 GB droplet has spare. At 4 GB the stack already
+# sits at ~2.7 GB with swap in use; Metabase is a JVM app wanting 700 MB-1 GB
+# on top. Bring this up only on 8 GB or larger.
+#
+# Uses the bundled H2 application database rather than its own Postgres. That is
+# the wrong choice for real production — H2 is a single file with no concurrent
+# access story — but right for a demo: one fewer container, one fewer password,
+# and nothing here is the system of record.
+
+services:
+  metabase:
+    image: metabase/metabase:v0.50.21
+    container_name: sr-metabase
+    restart: unless-stopped
+    mem_limit: 1400m
+    environment:
+      MB_DB_TYPE: h2
+      MB_DB_FILE: /metabase-data/metabase.db
+      MB_JETTY_HOST: 0.0.0.0
+      MB_JETTY_PORT: "3001"
+      # Leave headroom under mem_limit for the JVM's non-heap footprint
+      # (metaspace, code cache, direct buffers), which is far from negligible.
+      JAVA_OPTS: "-Xmx900m -XX:MaxMetaspaceSize=200m"
+      MB_SITE_URL: "https://bi.${APP_DOMAIN:-joelatiam.com}"
+    volumes:
+      - metabase-data:/metabase-data
+    ports:
+      - "127.0.0.1:3001:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:3001/api/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 180s
+
+volumes:
+  metabase-data:
