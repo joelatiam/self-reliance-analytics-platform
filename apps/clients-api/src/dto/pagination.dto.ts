@@ -1,6 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export const DEFAULT_PAGE_SIZE = 100;
 export const MAX_PAGE_SIZE = 1000;
@@ -45,4 +52,15 @@ export class PaginationQueryDto {
   @IsOptional()
   @IsISO8601()
   updatedSince?: string;
+
+  @ApiProperty({
+    description:
+      "Opaque keyset cursor from a previous response's `meta.nextCursor`. " +
+      'When set, `page` is ignored and rows are walked by sort key instead of ' +
+      'OFFSET, so concurrent writes cannot shift a row out of the walk.',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }
