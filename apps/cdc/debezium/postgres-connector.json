@@ -8,7 +8,7 @@
     "database.password": "wb_app_pw",
     "database.dbname": "worldbank",
     "topic.prefix": "wb",
-    "table.include.list": "public.countries,public.indicators,public.observations",
+    "table.include.list": "public.countries,public.indicators,public.observations,public.refugee_statistics",
     "plugin.name": "pgoutput",
     "slot.name": "wb_debezium_slot",
     "publication.autocreate.mode": "filtered",
