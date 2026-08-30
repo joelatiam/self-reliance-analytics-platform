@@ -18,3 +18,7 @@ airflow/airflow.cfg
 
 .DS_Store
 *.log
+
+node_modules/
+apps/clients-api/dist/
+apps/clients-api/coverage/

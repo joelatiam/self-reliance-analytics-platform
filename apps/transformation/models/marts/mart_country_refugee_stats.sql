@@ -4,7 +4,7 @@
 ) }}
 
 -- Displacement population hosted per country per year, denormalized with
--- country context. This is the population Inkomoko's lending actually
+-- country context. This is the population the program's lending actually
 -- serves, sitting alongside the economic indicator marts.
 select
     r.country_iso3,
