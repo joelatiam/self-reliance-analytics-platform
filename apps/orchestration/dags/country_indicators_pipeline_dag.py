@@ -36,12 +36,12 @@ def wait_for_worldbank_cdc_sync() -> None:
 
 
 with DAG(
-    dag_id="worldbank_indicators_pipeline",
-    description="Ingest World Bank + UNHCR data, sync via CDC, transform in dbt",
+    dag_id="country_indicators_pipeline",
+    description="Ingest World Bank + UNHCR country-level indicators, sync via CDC, transform in dbt",
     schedule_interval="0 */6 * * *",
     start_date=days_ago(1),
     catchup=False,
-    tags=["worldbank", "unhcr", "ingestion", "cdc", "dbt"],
+    tags=["country-indicators", "worldbank", "unhcr", "ingestion", "cdc", "dbt"],
 ) as dag:
     ingest_worldbank = PythonOperator(
         task_id="ingest_worldbank_api", python_callable=run_worldbank_ingestion

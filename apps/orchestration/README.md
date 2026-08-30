@@ -7,9 +7,9 @@ Airflow: automates the full pipeline end-to-end on a schedule (and on demand).
 ```
 Dockerfile          apache/airflow base + ingestion deps + a dedicated dbt venv
 dags/
-  cdc_sync.py                 Shared "wait for ClickHouse to catch up" helper
-  worldbank_pipeline_dag.py   Six-hourly: World Bank + UNHCR aggregates
-  client_activity_dag.py      Ten-minute: operational client activity
+  cdc_sync.py                          Shared "wait for ClickHouse to catch up" helper
+  country_indicators_pipeline_dag.py   Six-hourly: World Bank + UNHCR aggregates
+  client_activity_dag.py               Ten-minute: operational client activity
 ```
 
 ## The DAGs
@@ -18,7 +18,7 @@ Two, because the sources move at completely different speeds. Yearly country
 aggregates on a ten-minute schedule would be pure waste; operational client
 activity on a six-hourly one would be six hours stale.
 
-`worldbank_indicators_pipeline`, scheduled every 6 hours (`0 */6 * * *`), also triggerable manually:
+`country_indicators_pipeline`, scheduled every 6 hours (`0 */6 * * *`), also triggerable manually:
 
 ```
 ingest_worldbank_api  ┐
@@ -49,6 +49,6 @@ Runs with `SequentialExecutor` + SQLite — intentionally minimal for a self-con
 ## Access
 
 - UI: http://localhost:8080 (`admin` / `admin`, see `.env`)
-- Trigger manually: `docker exec wb-airflow-scheduler airflow dags trigger worldbank_indicators_pipeline`
+- Trigger manually: `docker exec wb-airflow-scheduler airflow dags trigger country_indicators_pipeline`
 - Trigger the client pipeline: `docker exec wb-airflow-scheduler airflow dags trigger client_activity_pipeline`
-- Check task states: `docker exec wb-airflow-scheduler airflow tasks states-for-dag-run worldbank_indicators_pipeline <run_id>`
+- Check task states: `docker exec wb-airflow-scheduler airflow tasks states-for-dag-run country_indicators_pipeline <run_id>`
