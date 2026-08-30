@@ -15,6 +15,18 @@ models:
       - name: name
         tests: [not_null]
 
+  - name: stg_refugee_statistics
+    columns:
+      - name: country_iso3
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_countries')
+                field: iso3_code
+      - name: year
+        tests: [not_null]
+
   - name: stg_observations
     columns:
       - name: country_code

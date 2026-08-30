@@ -1,4 +1,4 @@
-"""Orchestrates: World Bank ingestion -> wait for CDC sync -> dbt build."""
+"""Orchestrates: ingestion (World Bank + UNHCR) -> wait for CDC sync -> dbt build."""
 from __future__ import annotations
 
 import os
@@ -16,15 +16,22 @@ sys.path.insert(0, "/opt/airflow/ingestion/src")
 
 CDC_SYNC_MAX_ATTEMPTS = 10
 CDC_SYNC_POLL_SECONDS = 6
+SYNCED_TABLES = ["observations", "refugee_statistics"]
 
 
-def run_ingestion() -> None:
+def run_worldbank_ingestion() -> None:
     import main as ingestion_main
 
-    ingestion_main.run()
+    ingestion_main.run_worldbank()
 
 
-def _postgres_observation_count() -> int:
+def run_refugee_ingestion() -> None:
+    import main as ingestion_main
+
+    ingestion_main.run_refugee_stats()
+
+
+def _postgres_row_count(table: str) -> int:
     conn = psycopg2.connect(
         host=os.environ["POSTGRES_HOST"],
         port=os.environ.get("POSTGRES_PORT", "5432"),
@@ -34,17 +41,17 @@ def _postgres_observation_count() -> int:
     )
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT count(*) FROM observations")
+            cur.execute(f"SELECT count(*) FROM {table}")
             return cur.fetchone()[0]
     finally:
         conn.close()
 
 
-def _clickhouse_observation_count() -> int:
+def _clickhouse_row_count(table: str) -> int:
     url = f"http://{os.environ['CLICKHOUSE_HOST']}:{os.environ['CLICKHOUSE_HTTP_PORT']}/"
     response = requests.get(
         url,
-        params={"query": "SELECT count() FROM worldbank.raw_observations"},
+        params={"query": f"SELECT count() FROM worldbank.raw_{table} FINAL"},
         auth=(os.environ["CLICKHOUSE_USER"], os.environ["CLICKHOUSE_PASSWORD"]),
         timeout=10,
     )
@@ -58,11 +65,11 @@ def wait_for_cdc_sync() -> None:
     Debezium replication is near-real-time but async; this avoids running dbt
     against a warehouse that hasn't fully caught up with the latest ingest.
     """
-    target = _postgres_observation_count()
+    targets = {table: _postgres_row_count(table) for table in SYNCED_TABLES}
     for attempt in range(1, CDC_SYNC_MAX_ATTEMPTS + 1):
-        current = _clickhouse_observation_count()
-        print(f"[cdc-sync] attempt {attempt}: clickhouse={current} postgres={target}")
-        if current >= target:
+        current = {table: _clickhouse_row_count(table) for table in SYNCED_TABLES}
+        print(f"[cdc-sync] attempt {attempt}: clickhouse={current} postgres={targets}")
+        if all(current[t] >= targets[t] for t in SYNCED_TABLES):
             return
         time.sleep(CDC_SYNC_POLL_SECONDS)
     print("[cdc-sync] gave up waiting for full sync, proceeding with dbt build anyway")
@@ -70,13 +77,19 @@ def wait_for_cdc_sync() -> None:
 
 with DAG(
     dag_id="worldbank_indicators_pipeline",
-    description="Ingest World Bank data, sync via CDC, transform in dbt",
+    description="Ingest World Bank + UNHCR data, sync via CDC, transform in dbt",
     schedule_interval="0 */6 * * *",
     start_date=days_ago(1),
     catchup=False,
-    tags=["worldbank", "ingestion", "cdc", "dbt"],
+    tags=["worldbank", "unhcr", "ingestion", "cdc", "dbt"],
 ) as dag:
-    ingest = PythonOperator(task_id="ingest_worldbank_api", python_callable=run_ingestion)
+    ingest_worldbank = PythonOperator(
+        task_id="ingest_worldbank_api", python_callable=run_worldbank_ingestion
+    )
+
+    ingest_refugee = PythonOperator(
+        task_id="ingest_refugee_stats", python_callable=run_refugee_ingestion
+    )
 
     wait_cdc = PythonOperator(task_id="wait_for_cdc_sync", python_callable=wait_for_cdc_sync)
 
@@ -88,4 +101,4 @@ with DAG(
         ),
     )
 
-    ingest >> wait_cdc >> dbt_build
+    [ingest_worldbank, ingest_refugee] >> wait_cdc >> dbt_build
