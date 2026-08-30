@@ -19,7 +19,7 @@ CDC_SYNC_POLL_SECONDS = 6
 
 
 def run_ingestion() -> None:
-    import main as ingestion_main  # noqa: PLC0415 (loaded from sys.path above)
+    import main as ingestion_main
 
     ingestion_main.run()
 
