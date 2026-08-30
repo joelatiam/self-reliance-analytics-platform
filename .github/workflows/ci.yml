@@ -18,6 +18,24 @@ jobs:
       - run: ruff check apps/ingestion/src apps/orchestration/dags
       - run: pytest apps/ingestion/tests -v
 
+  clients-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/clients-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/clients-api/package-lock.json
+      - run: npm ci
+      - run: npx eslint "src/**/*.ts"
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm test
+      - run: npm run build
+
   dbt-build:
     runs-on: ubuntu-latest
     needs: ingestion-tests
