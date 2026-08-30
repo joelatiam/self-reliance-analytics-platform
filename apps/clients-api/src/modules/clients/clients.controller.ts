@@ -2,8 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  HttpCode,
-  HttpStatus,
   Param,
   Post,
   Query,
@@ -18,7 +16,6 @@ import {
   ApiOperation,
   ApiParam,
   ApiQuery,
-  ApiResponse,
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
@@ -46,33 +43,15 @@ import {
   LoansQueryDto,
   RepaymentsQueryDto,
 } from './dto/loan.dto';
-import {
-  SeedSimulationDto,
-  SummaryQueryDto,
-  TriggerActivityTickDto,
-} from './dto/simulation.dto';
 import { swaggerDefinitions } from './swagger/clients-swagger';
 
-@ApiTags('Service')
+@ApiTags('Clients')
 @ApiSecurity(API_KEY_HEADER)
 @Controller({ version: '1' })
 @UseGuards(ApiKeyGuard)
+/** Record endpoints: read the caseload, or add one record by hand. */
 export class ClientsController {
   constructor(private readonly clientsService: ClientsService) {}
-
-  @Get()
-  @ApiOperation(swaggerDefinitions.homeOperation)
-  @ApiResponse(swaggerDefinitions.homeResponse)
-  getHome(): string {
-    return this.clientsService.home();
-  }
-
-  @Get('/reference')
-  @ApiOperation(swaggerDefinitions.referenceOperation)
-  @ApiOkResponse(swaggerDefinitions.referenceSuccess)
-  getReference() {
-    return this.clientsService.reference();
-  }
 
   @ApiTags('Clients')
   @Get('/clients')
@@ -215,49 +194,5 @@ export class ClientsController {
   @ApiNotFoundResponse(swaggerDefinitions.clientNotFound)
   createAdvisorySession(@Body() body: CreateAdvisorySessionDto) {
     return this.clientsService.createAdvisorySession(body);
-  }
-
-  @ApiTags('Simulation')
-  @Get('/simulation/status')
-  @ApiOperation(swaggerDefinitions.statusOperation)
-  @ApiOkResponse(swaggerDefinitions.statusSuccess)
-  getSimulationStatus() {
-    return this.clientsService.getSimulationStatus();
-  }
-
-  @ApiTags('Simulation')
-  @Post('/simulation/seed')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiOperation(swaggerDefinitions.seedOperation)
-  @ApiBody({
-    type: SeedSimulationDto,
-    examples: swaggerDefinitions.seedExamples,
-  })
-  @ApiCreatedResponse(swaggerDefinitions.seedSuccess)
-  seed(@Body() body: SeedSimulationDto) {
-    return this.clientsService.seed(body);
-  }
-
-  @ApiTags('Simulation')
-  @Post('/simulation/tick')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation(swaggerDefinitions.triggerTickOperation)
-  @ApiBody({
-    type: TriggerActivityTickDto,
-    examples: swaggerDefinitions.triggerTickExamples,
-    required: false,
-  })
-  @ApiOkResponse(swaggerDefinitions.triggerTickSuccess)
-  triggerTick(@Body() body: TriggerActivityTickDto) {
-    return this.clientsService.triggerTick(body ?? {});
-  }
-
-  @ApiTags('Simulation')
-  @Get('/summary')
-  @ApiOperation(swaggerDefinitions.summaryOperation)
-  @ApiQuery(swaggerDefinitions.countryQueryParam)
-  @ApiOkResponse(swaggerDefinitions.summarySuccess)
-  getSummary(@Query() query: SummaryQueryDto) {
-    return this.clientsService.getPortfolioSummary(query.country);
   }
 }
