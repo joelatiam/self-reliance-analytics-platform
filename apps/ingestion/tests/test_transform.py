@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from transform import (  # noqa: E402
+from transform import (
     parse_country,
     parse_indicator,
     parse_observation,

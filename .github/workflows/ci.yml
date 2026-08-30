@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r apps/ingestion/requirements.txt pytest ruff
-      - run: ruff check apps/ingestion/src apps/orchestration/dags
+      - run: ruff check apps/ingestion apps/orchestration/dags apps/observability
       - run: pytest apps/ingestion/tests -v
 
   clients-api:
