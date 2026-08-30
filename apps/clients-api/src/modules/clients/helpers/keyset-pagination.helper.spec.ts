@@ -42,7 +42,9 @@ describe('paginateByKeyset', () => {
     addOrderBy(): BuilderStub;
     skip: jest.Mock<BuilderStub, [number]>;
     take(): BuilderStub;
-    getManyAndCount(): Promise<[{ id: number; updatedAt: Date }[], number]>;
+    clone: jest.Mock<BuilderStub, []>;
+    getMany(): Promise<{ id: number; updatedAt: Date }[]>;
+    getCount(): Promise<number>;
   }
 
   const builder = (
@@ -60,7 +62,14 @@ describe('paginateByKeyset', () => {
       addOrderBy: () => stub,
       skip: jest.fn((offset: number) => (void offset, stub)),
       take: () => stub,
-      getManyAndCount: () => Promise.resolve([rows, total]),
+      // A clone taken before the cursor predicate is added; it must not see it.
+      clone: jest.fn(() => ({
+        ...stub,
+        calls: [...calls],
+        getCount: () => Promise.resolve(total),
+      })),
+      getMany: () => Promise.resolve(rows),
+      getCount: () => Promise.resolve(total),
     };
     return stub;
   };
@@ -96,6 +105,25 @@ describe('paginateByKeyset', () => {
       limit: 50,
     });
     expect(shortPage.meta.nextCursor).toBeNull();
+  });
+
+  it('counts total before the cursor narrows the query', async () => {
+    // Counting after would make total mean "rows still ahead of the cursor",
+    // so it would shrink on every page and read like rows were vanishing.
+    const stub = builder([row(9, '2026-08-30T10:00:02.000Z')], 250);
+    const cursor = encodeCursor(row(8, '2026-08-30T10:00:01.000Z'));
+
+    const result = await paginateByKeyset(stub as never, 'loan', {
+      cursor,
+      limit: 40,
+    });
+
+    expect(stub.clone).toHaveBeenCalled();
+    expect(result.meta.total).toBe(250);
+    const cloneCalls = stub.clone.mock.results[0].value.calls;
+    expect(
+      cloneCalls.some((c: { sql: string }) => c.sql.includes('cursorId')),
+    ).toBe(false);
   });
 
   it('reports the last row as the watermark', async () => {

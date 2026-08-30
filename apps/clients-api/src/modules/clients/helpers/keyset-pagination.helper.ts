@@ -72,6 +72,12 @@ export async function paginateByKeyset<T extends KeysetRow>(
   }
 
   const position = query.cursor ? decodeCursor(query.cursor) : null;
+
+  // Counted before the cursor narrows the query. Counting after it would make
+  // `total` mean "rows still ahead of the cursor", so it would shrink on every
+  // page of a walk and read like rows were disappearing from the source.
+  const countBuilder = builder.clone();
+
   if (position) {
     // Row-value comparison, so rows sharing a timestamp are split by id
     // instead of being re-read or skipped at the page boundary.
@@ -87,7 +93,10 @@ export async function paginateByKeyset<T extends KeysetRow>(
     builder.skip((page - 1) * limit);
   }
 
-  const [data, total] = await builder.take(limit).getManyAndCount();
+  const [data, total] = await Promise.all([
+    builder.take(limit).getMany(),
+    countBuilder.getCount(),
+  ]);
   const last = data.length ? data[data.length - 1] : null;
 
   return {
