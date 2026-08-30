@@ -28,21 +28,21 @@ services:
       - "127.0.0.1:5433:5432"
 
   kafka:
-    mem_limit: 800m
+    mem_limit: 704m
     environment:
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports: !override
       - "127.0.0.1:29092:29092"
 
   kafka-connect:
-    mem_limit: 800m
+    mem_limit: 768m
     environment:
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports: !override
       - "127.0.0.1:8083:8083"
 
   clickhouse:
-    mem_limit: 900m
+    mem_limit: 768m
     volumes:
       - ./deploy/clickhouse-memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
     ports: !override
@@ -51,12 +51,12 @@ services:
       - "127.0.0.1:9363:9363"
 
   airflow-webserver:
-    mem_limit: 560m
+    mem_limit: 704m
     ports: !override
       - "127.0.0.1:8080:8080"
 
   airflow-scheduler:
-    mem_limit: 480m
+    mem_limit: 960m
 
   clients-api-db:
     mem_limit: 256m
@@ -79,7 +79,7 @@ services:
       - "127.0.0.1:9105:9105"
 
   prometheus:
-    mem_limit: 256m
+    mem_limit: 192m
     # Default args must be restated — `command` replaces, it does not extend.
     # 7d retention and a small block size keep the TSDB inside the cap.
     command:
@@ -93,7 +93,7 @@ services:
       - "127.0.0.1:9090:9090"
 
   grafana:
-    mem_limit: 224m
+    mem_limit: 192m
     environment:
       GF_SERVER_ROOT_URL: "https://grafana.${APP_DOMAIN:-example.com}"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
