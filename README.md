@@ -17,6 +17,7 @@ apps/
   transformation/   dbt project (staging -> marts)
   orchestration/    Airflow DAG + image
   observability/    Custom Prometheus exporter, Prometheus/Grafana config
+  bi/               Optional Metabase BI layer over the marts (opt-in profile, not started by default)
 docs/               Design report
 docker-compose.yml  Single-command stack
 ```
@@ -30,6 +31,7 @@ Each app has its own README with details specific to it:
 - [apps/transformation](apps/transformation/README.md)
 - [apps/orchestration](apps/orchestration/README.md)
 - [apps/observability](apps/observability/README.md)
+- [apps/bi](apps/bi/README.md)
 
 ## Dependencies
 
@@ -150,6 +152,17 @@ Every client, business, loan, repayment and coaching session it serves is invent
 What it is *not* is uniform noise. Clients are distributed across the five countries by hosted displaced population, nationalities follow the real origin mix per host country, and the repayment and demographic rates are set from published sector figures — so the numbers coming out of the marts behave like the real thing even though none of them are. Details and the generation script are in the [app README](apps/clients-api/README.md).
 
 Configured via `.env` (`CLIENTS_API_BASE_URL`, `CLIENTS_API_KEY`, `CLIENTS_API_PAGE_SIZE`). It writes on the 5th, 15th, 25th, ... minute and the pipeline pulls on the ten-minute boundary, so every fetch reads settled data.
+
+### Fetching from it
+
+```bash
+./scripts/fetch-clients-api.sh --list          # what you can ask for
+./scripts/fetch-clients-api.sh summary         # portfolio rollup
+./scripts/fetch-clients-api.sh clients         # every client, paged, one JSON object per line
+./scripts/fetch-clients-api.sh loans <ts>      # only what changed since <ts>
+```
+
+Rows go to stdout so the output pipes straight into `jq` or a file; paging progress and the watermark for the next incremental call go to stderr. That is the same loop the ingestion app runs.
 
 ## Accessing things
 
