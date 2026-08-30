@@ -77,9 +77,12 @@ agreement. It waits for DNS to propagate before trying, so it can be run
 immediately after adding the records.
 
 ```bash
-sudo app-tls you@example.com                # all four
+sudo app-tls you@example.com                # apex, www and every subdomain
 sudo app-tls you@example.com reports        # just one
+sudo app-tls you@example.com @              # the apex only
 ```
+
+`@` means the apex; every other argument is treated as a subdomain label.
 
 Renewal is handled by `certbot.timer`, already enabled.
 

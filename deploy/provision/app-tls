@@ -8,13 +8,18 @@
 #
 #   sudo app-tls you@example.com
 #   sudo app-tls you@example.com api airflow      # just these two
+#   sudo app-tls you@example.com @                # the bare domain only
+#
+# "@" means the apex. Everything else is treated as a subdomain label.
 set -euo pipefail
 
-DOMAIN=${DOMAIN:-example.com}
+DOMAIN=${DOMAIN:-joelatiam.com}
 EMAIL=${1:?usage: app-tls <email> [subdomain ...]}
 shift || true
 SUBS=("$@")
-[ ${#SUBS[@]} -eq 0 ] && SUBS=(api airflow grafana bi)
+[ ${#SUBS[@]} -eq 0 ] && SUBS=(@ www api airflow grafana bi)
+
+fqdn() { [ "$1" = "@" ] && echo "$DOMAIN" || echo "$1.$DOMAIN"; }
 
 IP=$(curl -fsS --max-time 10 https://api.ipify.org || echo "")
 echo "This host's public IP: ${IP:-unknown}"
@@ -25,9 +30,10 @@ PENDING=("${SUBS[@]}")
 while [ ${#PENDING[@]} -gt 0 ]; do
   STILL=()
   for s in "${PENDING[@]}"; do
-    GOT=$(dig +short @1.1.1.1 "${s}.${DOMAIN}" A | tail -1)
+    NAME=$(fqdn "$s")
+    GOT=$(dig +short @1.1.1.1 "$NAME" A | tail -1)
     if [ -n "$GOT" ] && { [ -z "$IP" ] || [ "$GOT" = "$IP" ]; }; then
-      echo "    ${s}.${DOMAIN} -> $GOT"
+      echo "    $NAME -> $GOT"
     else
       STILL+=("$s")
     fi
@@ -35,7 +41,7 @@ while [ ${#PENDING[@]} -gt 0 ]; do
   PENDING=("${STILL[@]}")
   [ ${#PENDING[@]} -eq 0 ] && break
   if [ "$(date +%s)" -ge "$DEADLINE" ]; then
-    echo "!! still unresolved after 30 min: ${PENDING[*]}" >&2
+    echo "!! still unresolved (or pointing elsewhere) after 30 min: ${PENDING[*]}" >&2
     echo "   Check the A records at your registrar, then re-run." >&2
     exit 1
   fi
@@ -46,13 +52,14 @@ done
 # can then be added or removed without reissuing everyone else's certificate.
 FAILED=()
 for s in "${SUBS[@]}"; do
-  echo "==> certificate for ${s}.${DOMAIN}"
+  NAME=$(fqdn "$s")
+  echo "==> certificate for $NAME"
   if certbot --nginx --non-interactive --agree-tos -m "$EMAIL" \
-       --redirect --keep-until-expiring -d "${s}.${DOMAIN}"; then
+       --redirect --keep-until-expiring -d "$NAME"; then
     echo "    ok"
   else
-    echo "    FAILED for ${s}.${DOMAIN}" >&2
-    FAILED+=("$s")
+    echo "    FAILED for $NAME" >&2
+    FAILED+=("$NAME")
   fi
 done
 
