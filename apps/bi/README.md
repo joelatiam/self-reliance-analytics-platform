@@ -105,7 +105,7 @@ their SQL equivalents:
 ```sql
 select country_iso3, clients_total, clients_active, women_share_pct,
        displaced_share_pct, jobs_supported
-from worldbank.mart_client_portfolio
+from self_reliance.mart_client_portfolio
 order by clients_total desc;
 ```
 
@@ -113,7 +113,7 @@ order by clients_total desc;
 
 ```sql
 select disbursement_month, country_iso3, principal_disbursed_usd, par30_pct
-from worldbank.mart_loan_performance
+from self_reliance.mart_loan_performance
 order by disbursement_month;
 ```
 
@@ -121,7 +121,7 @@ order by disbursement_month;
 
 ```sql
 select period, sector, avg_revenue_growth_pct, growing_share_pct, jobs_supported
-from worldbank.mart_business_growth
+from self_reliance.mart_business_growth
 order by period;
 ```
 
@@ -129,7 +129,7 @@ order by period;
 
 ```sql
 select year, country_name, indicator_name, value
-from worldbank.mart_country_indicators
+from self_reliance.mart_country_indicators
 where indicator_code = 'NY.GDP.MKTP.KD.ZG'
 order by year;
 ```

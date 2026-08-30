@@ -262,7 +262,7 @@ services:
   # Full setup and connection details: apps/bi/README.md
   metabase:
     image: metabase/metabase:v0.50.21
-    container_name: wb-metabase
+    container_name: sr-metabase
     profiles: ["bi"]
     environment:
       # Metabase's own application database (questions, dashboards, users).

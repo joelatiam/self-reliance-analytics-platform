@@ -2,13 +2,84 @@
   "uid": "self-reliance-pipeline-overview",
   "title": "Pipeline Overview",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "time": {
     "from": "now-1h",
     "to": "now"
   },
   "refresh": "10s",
   "panels": [
+    {
+      "id": 8,
+      "title": "Apps Up",
+      "description": "Every app in the stack, probed each scrape by the custom exporter. The BI layer is opt-in, so it appears only once started (`docker compose --profile bi up -d metabase`) rather than sitting permanently red.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_app_up",
+          "legendFormat": "{{app}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "noValue": "N/A"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Health Check Response Time",
+      "description": "How long each app takes to answer. A climbing line is the warning before a red tile.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_app_response_seconds",
+          "legendFormat": "{{app}}",
+          "refId": "A"
+        }
+      ]
+    },
     {
       "id": 1,
       "title": "CDC Lag (rows)",
@@ -17,7 +88,7 @@
         "h": 6,
         "w": 6,
         "x": 0,
-        "y": 0
+        "y": 8
       },
       "targets": [
         {
@@ -56,7 +127,7 @@
         "h": 6,
         "w": 6,
         "x": 6,
-        "y": 0
+        "y": 8
       },
       "targets": [
         {
@@ -96,7 +167,7 @@
         "h": 6,
         "w": 6,
         "x": 12,
-        "y": 0
+        "y": 8
       },
       "targets": [
         {
@@ -133,7 +204,7 @@
         "h": 8,
         "w": 18,
         "x": 0,
-        "y": 6
+        "y": 14
       },
       "targets": [
         {
@@ -157,7 +228,7 @@
         "h": 9,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 22
       },
       "targets": [
         {
@@ -176,7 +247,7 @@
         "h": 9,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {
@@ -199,7 +270,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {
