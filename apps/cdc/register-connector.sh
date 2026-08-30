@@ -27,11 +27,16 @@ RESPONSE=$(curl -s -w '\n%{http_code}' -X POST -H "Content-Type: application/jso
   --data @"$CONFIG" "$CONNECT_URL/connectors")
 STATUS=$(echo "$RESPONSE" | tail -1)
 BODY=$(echo "$RESPONSE" | sed '$d')
-echo "$BODY"
 
+# Never echo the success body: Kafka Connect echoes the whole config back,
+# database.password included, and container logs are readable by anyone with
+# log access. Errors are safe to print — they describe the failure, not the
+# credentials.
+#
 # Exit non-zero on failure. Without this the container exits 0 and a deploy
 # reports success while CDC is dead — the failure mode this file just had.
 case "$STATUS" in
   2*) echo "Connector registered (HTTP $STATUS)." ;;
-  *)  echo "Connector registration FAILED (HTTP $STATUS)." >&2; exit 1 ;;
+  *)  echo "Connector registration FAILED (HTTP $STATUS): $(echo "$BODY" | head -c 400)" >&2
+      exit 1 ;;
 esac
