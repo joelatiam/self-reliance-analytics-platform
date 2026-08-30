@@ -47,3 +47,107 @@ models:
         tests: [not_null]
       - name: value
         tests: [not_null]
+
+  - name: stg_clients
+    columns:
+      - name: client_code
+        tests: [not_null, unique]
+      - name: country_iso3
+        tests: [not_null]
+      - name: displacement_status
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - REFUGEE
+                  - ASYLUM_SEEKER
+                  - RETURNED_REFUGEE
+                  - IDP
+                  - RETURNED_IDP
+                  - STATELESS
+                  - HOST_COMMUNITY
+
+  - name: stg_businesses
+    columns:
+      - name: business_code
+        tests: [not_null, unique]
+      - name: client_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_clients')
+                field: client_code
+      - name: country_iso3
+        tests: [not_null]
+
+  - name: stg_loans
+    columns:
+      - name: loan_code
+        tests: [not_null, unique]
+      - name: client_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_clients')
+                field: client_code
+      - name: business_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_businesses')
+                field: business_code
+      - name: status
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - PENDING
+                  - APPROVED
+                  - DISBURSED
+                  - REPAYING
+                  - LATE
+                  - REPAID
+                  - DEFAULTED
+                  - WRITTEN_OFF
+                  - REJECTED
+
+  - name: stg_loan_repayments
+    columns:
+      - name: repayment_code
+        tests: [not_null, unique]
+      - name: loan_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_loans')
+                field: loan_code
+      - name: amount_usd
+        tests: [not_null]
+
+  - name: stg_advisory_sessions
+    columns:
+      - name: session_code
+        tests: [not_null, unique]
+      - name: client_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_clients')
+                field: client_code
+
+  - name: stg_business_metrics
+    columns:
+      - name: business_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_businesses')
+                field: business_code
+      - name: period
+        tests: [not_null]

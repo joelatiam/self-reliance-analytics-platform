@@ -22,6 +22,8 @@ See [`docs/design_report.md`](../../docs/design_report.md#3-data-model--schema) 
 
 Quick summary: `JSONAsString` + `JSONExtract` in a materialized view (rather than declaring Debezium's full envelope schema) keeps this tolerant of minor envelope changes; `ReplacingMergeTree(ts_ms)` versions on Debezium's own event timestamp, so `SELECT ... FINAL` always gives the latest state per key.
 
+`FINAL` matters much more for the client-activity tables than for the country aggregates. A loan row is re-replicated on every repayment, so the same `loan_code` lands many times; the staging models all select `final` to collapse it to current state.
+
 ## Check it
 
 ```bash

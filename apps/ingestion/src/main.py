@@ -9,6 +9,10 @@ Env vars:
   UNHCR_COUNTRIES       comma-separated ISO3 codes, e.g. RWA,KEN,ETH,SSD,TCD
   UNHCR_YEAR_FROM       default 2015
   UNHCR_YEAR_TO         default 2023
+  CLIENTS_API_BASE_URL  default http://localhost:4000/api/v1 (compose sets the
+                        clients-api service name)
+  CLIENTS_API_KEY       optional; sent as x-api-key when set
+  CLIENTS_API_PAGE_SIZE default 500
 """
 from __future__ import annotations
 
@@ -16,14 +20,19 @@ import logging
 import os
 import sys
 
+from clients_api_client import DEFAULT_BASE_URL, RESOURCE_PATHS, ClientsApiClient
 from db import (
     get_connection,
+    get_watermark,
+    set_watermark,
+    upsert_client_activity,
     upsert_countries,
     upsert_indicators,
     upsert_observations,
     upsert_refugee_statistics,
 )
 from transform import (
+    CLIENT_ACTIVITY_PARSERS,
     parse_country,
     parse_indicator,
     parse_observation,
@@ -85,9 +94,59 @@ def run_refugee_stats() -> None:
     logger.info("UNHCR ingestion complete: %s country-year rows", n_stats)
 
 
+def run_client_activity() -> None:
+    """Pull every clients API resource incrementally, one watermark each.
+
+    Runs on a much tighter schedule than the yearly aggregates: the source
+    generates activity every ten minutes, so this pulls only what changed since
+    the previous run rather than re-reading the whole caseload.
+    """
+    base_url = os.environ.get("CLIENTS_API_BASE_URL", DEFAULT_BASE_URL)
+    api_key = os.environ.get("CLIENTS_API_KEY") or None
+    page_size = int(os.environ.get("CLIENTS_API_PAGE_SIZE", "500"))
+
+    client = ClientsApiClient(base_url=base_url, api_key=api_key, page_size=page_size)
+    totals: dict[str, int] = {}
+
+    with get_connection() as conn:
+        for resource in RESOURCE_PATHS:
+            parser = CLIENT_ACTIVITY_PARSERS[resource]
+            watermark = get_watermark(conn, resource)
+            logger.info(
+                "Fetching %s from clients API (since %s)", resource, watermark or "the beginning"
+            )
+
+            ingested = 0
+            newest = watermark
+
+            for page in client.fetch_resource(resource, updated_since=watermark):
+                rows = [row for raw in page if (row := parser(raw)) is not None]
+                ingested += upsert_client_activity(conn, resource, rows)
+
+                page_newest = max(
+                    (row["source_updated_at"] for row in rows if row["source_updated_at"]),
+                    default=None,
+                )
+                if page_newest and (newest is None or page_newest > newest):
+                    newest = page_newest
+
+            # Only advance the mark when something moved; an empty run leaves it
+            # exactly where it was so nothing can be skipped.
+            if ingested and newest:
+                set_watermark(conn, resource, newest, ingested)
+
+            totals[resource] = ingested
+
+    logger.info(
+        "Clients API ingestion complete: %s",
+        ", ".join(f"{resource}={count}" for resource, count in totals.items()),
+    )
+
+
 def run() -> None:
     run_worldbank()
     run_refugee_stats()
+    run_client_activity()
 
 
 if __name__ == "__main__":
