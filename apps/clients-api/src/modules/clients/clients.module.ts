@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { AllConfigType } from 'src/config';
 import { AuthModule } from '../auth/auth.module';
 import { ClientsController } from './clients.controller';
+import { SimulationController } from './simulation.controller';
 import { ClientsService } from './clients.service';
 import { ActivityTick } from './entities/activity-tick.entity';
 import { AdvisorySession } from './entities/advisory-session.entity';
@@ -16,8 +17,15 @@ import { Loan } from './entities/loan.entity';
 import { LoanRepayment } from './entities/loan-repayment.entity';
 import { seedSimulation } from './helpers/simulation-random.helper';
 import { ClientsActivityService } from './services/clients-activity.service';
+import { ClientsActivitySelectionService } from './services/clients-activity-selection.service';
+import { ClientsLendingStepsService } from './services/clients-lending-steps.service';
+import { ClientsOutreachStepsService } from './services/clients-outreach-steps.service';
+import { ClientsSimulationStatusService } from './services/clients-simulation-status.service';
 import { ClientsGeneratorService } from './services/clients-generator.service';
+import { ClientsIntakeService } from './services/clients-intake.service';
+import { ClientsSeedService } from './services/clients-seed.service';
 import { ClientsQueryService } from './services/clients-query.service';
+import { ClientsSummaryService } from './services/clients-summary.service';
 import { ClientsSequenceService } from './services/clients-sequence.service';
 
 @Module({
@@ -34,12 +42,19 @@ import { ClientsSequenceService } from './services/clients-sequence.service';
       ActivityTick,
     ]),
   ],
-  controllers: [ClientsController],
+  controllers: [ClientsController, SimulationController],
   providers: [
     ClientsService,
     ClientsQueryService,
+    ClientsSummaryService,
     ClientsGeneratorService,
+    ClientsIntakeService,
+    ClientsSeedService,
     ClientsActivityService,
+    ClientsActivitySelectionService,
+    ClientsLendingStepsService,
+    ClientsOutreachStepsService,
+    ClientsSimulationStatusService,
     ClientsSequenceService,
   ],
   exports: [ClientsService, ClientsActivityService],
@@ -50,7 +65,7 @@ export class ClientsModule implements OnApplicationBootstrap {
   constructor(
     @InjectRepository(Client)
     private readonly clientRepository: Repository<Client>,
-    private readonly generatorService: ClientsGeneratorService,
+    private readonly seedService: ClientsSeedService,
     private readonly configService: ConfigService<AllConfigType>,
   ) {}
 
@@ -81,7 +96,7 @@ export class ClientsModule implements OnApplicationBootstrap {
     this.logger.log(
       `Seeding ${clientsConfig.seedClientCount} clients across ${clientsConfig.countries.join(', ')}`,
     );
-    const seeded = await this.generatorService.seedCaseload({
+    const seeded = await this.seedService.seedCaseload({
       clients: clientsConfig.seedClientCount,
       withHistory: true,
     });
