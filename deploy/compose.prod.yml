@@ -50,13 +50,24 @@ services:
       - "127.0.0.1:9000:9000"
       - "127.0.0.1:9363:9363"
 
+  # dbt writes logs/ and target/ into the project dir by default. In production
+  # that dir is a git checkout owned by `deploy` and mounted into a container
+  # running as uid 50000, so the write fails — and dbt dies before its logger is
+  # up, exiting 2 with no output at all. Point both at writable scratch space;
+  # build artefacts have no business in a checkout that deploy.sh hard-resets.
   airflow-webserver:
     mem_limit: 704m
+    environment:
+      DBT_LOG_PATH: /tmp/dbt/logs
+      DBT_TARGET_PATH: /tmp/dbt/target
     ports: !override
       - "127.0.0.1:8080:8080"
 
   airflow-scheduler:
     mem_limit: 960m
+    environment:
+      DBT_LOG_PATH: /tmp/dbt/logs
+      DBT_TARGET_PATH: /tmp/dbt/target
 
   clients-api-db:
     mem_limit: 256m
