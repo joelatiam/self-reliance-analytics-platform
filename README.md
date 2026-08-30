@@ -33,7 +33,10 @@ Each app has its own README with details specific to it:
 
 ## Dependencies
 
-- Docker + Docker Compose v2
+- Docker + Docker Compose v2, with **at least 6 GB of memory** allocated to the
+  Docker VM. The stack runs Kafka, ClickHouse, Airflow and Postgres side by
+  side; on a 4 GB default allocation the Kafka and ClickHouse containers get
+  OOM-killed (exit code 137) shortly after boot.
 - Nothing else — all app dependencies (Python, dbt, Airflow, etc.) are installed inside the containers.
 
 ## Run it end-to-end
@@ -49,6 +52,16 @@ Give it 1–2 minutes for every health check to turn green, then check status:
 
 ```bash
 docker compose ps
+```
+
+**If you already have the stack running from an earlier revision**, note that
+Postgres and ClickHouse only run their `init/` SQL against an *empty* data
+directory. New tables added under `apps/ingestion/sql/` or
+`apps/warehouse/init/` will not appear in an existing volume, and the DAG that
+needs them fails with `relation ... does not exist`. Reset with:
+
+```bash
+docker compose down -v && docker compose up -d
 ```
 
 Trigger a full pipeline run (or just wait for the 6-hourly schedule):
@@ -137,7 +150,7 @@ Configured via `.env` (`CLIENTS_API_BASE_URL`, `CLIENTS_API_KEY`, `CLIENTS_API_P
 | Kafka Connect REST API | http://localhost:8083 | none |
 | Airflow UI | http://localhost:8080 | `admin` / `admin` (see `.env`, `AIRFLOW_ADMIN_*`) |
 | Prometheus | http://localhost:9090 | none |
-| Grafana | http://localhost:3000 | `admin` / `admin` (see `.env`, `GRAFANA_ADMIN_*`) — "World Bank Pipeline Overview" dashboard is auto-provisioned |
+| Grafana | http://localhost:3000 | `admin` / `admin` (see `.env`, `GRAFANA_ADMIN_*`) — "Pipeline Overview" dashboard is auto-provisioned |
 | Metrics exporter (raw) | http://localhost:9105/metrics | none |
 | Clients API (Swagger) | http://localhost:4000/docs | none by default (set `CLIENTS_API_KEY` to require `x-api-key`) |
 | Clients API Postgres | `localhost:5434` | `sr_app` / `sr_app_pw` (see `.env`) |
