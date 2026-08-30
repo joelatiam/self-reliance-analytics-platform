@@ -15,6 +15,10 @@ from prometheus_client.core import REGISTRY, GaugeMetricFamily
 
 EXPORTER_PORT = 9105
 
+# Must match the database the warehouse init SQL creates
+# (apps/warehouse/init/01_kafka_sources.sql) and dbt writes into.
+CLICKHOUSE_DB = os.environ.get("CLICKHOUSE_DB", "worldbank")
+
 # Every table replicated through CDC, so a stalled topic shows up per table
 # rather than being averaged away in a single number.
 REPLICATED_TABLES = [
@@ -101,16 +105,21 @@ def _clickhouse_query(query: str) -> str:
 
 
 def _clickhouse_table_stats(tables: list[str]) -> dict[str, tuple[int, int]]:
-    """(row_count, max_ts_ms) per raw table."""
+    """(row_count, max_ts_ms) per raw table.
+
+    A table that does not exist yet is skipped, but an unreachable server is
+    raised: swallowing both alike would let wb_pipeline_scrape_success report a
+    healthy pipeline while ClickHouse is down.
+    """
     stats: dict[str, tuple[int, int]] = {}
     for table in tables:
         try:
             raw = _clickhouse_query(
-                f"SELECT count(), max(ts_ms) FROM worldbank.raw_{table} FINAL FORMAT TSV"
+                f"SELECT count(), max(ts_ms) FROM {CLICKHOUSE_DB}.raw_{table} FINAL FORMAT TSV"
             )
             count_str, max_ts_str = raw.split("\t")
             stats[table] = (int(count_str), int(max_ts_str or 0))
-        except (requests.RequestException, ValueError):
+        except (requests.HTTPError, ValueError):
             continue
     return stats
 
@@ -150,27 +159,22 @@ class PipelineCollector:
             value=ch_observations or 0,
         )
 
-        lag_rows = (
-            (pg_observations - ch_observations)
-            if (pg_observations is not None and ch_observations is not None)
-            else 0
-        )
-        yield GaugeMetricFamily(
-            "wb_pipeline_cdc_lag_rows",
-            "Postgres row count minus ClickHouse row count: CDC backlog proxy",
-            value=lag_rows,
-        )
+        # Both lag gauges are omitted rather than zeroed when the input is
+        # unknown: a zero here reads as "perfectly caught up" on the dashboard,
+        # which is the opposite of the truth while ClickHouse is unreachable.
+        if pg_observations is not None and ch_observations is not None:
+            yield GaugeMetricFamily(
+                "wb_pipeline_cdc_lag_rows",
+                "Postgres row count minus ClickHouse row count: CDC backlog proxy",
+                value=pg_observations - ch_observations,
+            )
 
-        lag_seconds = (
-            max(time.time() - (ch_observations_max_ts / 1000.0), 0)
-            if ch_observations_max_ts
-            else 0
-        )
-        yield GaugeMetricFamily(
-            "wb_pipeline_cdc_lag_seconds",
-            "Seconds since the most recent CDC event landed in ClickHouse",
-            value=lag_seconds,
-        )
+        if ch_observations_max_ts:
+            yield GaugeMetricFamily(
+                "wb_pipeline_cdc_lag_seconds",
+                "Seconds since the most recent CDC event landed in ClickHouse",
+                value=max(time.time() - (ch_observations_max_ts / 1000.0), 0),
+            )
 
         # Per-table breakdown, so a single stalled topic is visible instead of
         # being hidden behind a healthy aggregate.
