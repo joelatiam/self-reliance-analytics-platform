@@ -1,0 +1,17 @@
+<!-- ClickHouse defaults to ~90% of host RAM. On a shared 4 GB box that starves
+     everything else, so the server is held to a hard ceiling with correspondingly
+     small caches. Fine for this dataset (thousands of rows, not billions). -->
+<clickhouse>
+    <max_server_memory_usage>629145600</max_server_memory_usage>
+    <mark_cache_size>134217728</mark_cache_size>
+    <uncompressed_cache_size>0</uncompressed_cache_size>
+    <background_pool_size>4</background_pool_size>
+    <background_schedule_pool_size>4</background_schedule_pool_size>
+    <max_concurrent_queries>20</max_concurrent_queries>
+    <profiles>
+        <default>
+            <max_memory_usage>419430400</max_memory_usage>
+            <max_threads>2</max_threads>
+        </default>
+    </profiles>
+</clickhouse>
