@@ -30,7 +30,10 @@ import {
   ClientsGeneratorService,
   EnrolClientResult,
 } from './services/clients-generator.service';
+import { ClientsIntakeService } from './services/clients-intake.service';
+import { ClientsSeedService } from './services/clients-seed.service';
 import { ClientsQueryService } from './services/clients-query.service';
+import { ClientsSummaryService } from './services/clients-summary.service';
 import {
   ActivityTickResult,
   SimulationStatus,
@@ -46,7 +49,10 @@ import { PaginatedResult, PortfolioSummary } from './types/client.types';
 export class ClientsService {
   constructor(
     private readonly queryService: ClientsQueryService,
+    private readonly summaryService: ClientsSummaryService,
     private readonly generatorService: ClientsGeneratorService,
+    private readonly intakeService: ClientsIntakeService,
+    private readonly seedService: ClientsSeedService,
     private readonly activityService: ClientsActivityService,
   ) {}
 
@@ -83,7 +89,7 @@ export class ClientsService {
   }
 
   createClient(dto: CreateClientDto): Promise<EnrolClientResult> {
-    return this.generatorService.createClientFromDto(dto);
+    return this.intakeService.createClientFromDto(dto);
   }
 
   listBusinesses(
@@ -97,7 +103,7 @@ export class ClientsService {
   }
 
   createBusiness(dto: CreateBusinessDto): Promise<Business> {
-    return this.generatorService.createBusinessFromDto(dto);
+    return this.intakeService.createBusinessFromDto(dto);
   }
 
   listLoans(query: LoansQueryDto): Promise<PaginatedResult<Loan>> {
@@ -109,7 +115,7 @@ export class ClientsService {
   }
 
   createLoan(dto: CreateLoanDto): Promise<Loan> {
-    return this.generatorService.createLoanFromDto(dto);
+    return this.intakeService.createLoanFromDto(dto);
   }
 
   listRepayments(
@@ -127,7 +133,7 @@ export class ClientsService {
   createAdvisorySession(
     dto: CreateAdvisorySessionDto,
   ): Promise<AdvisorySession> {
-    return this.generatorService.createAdvisorySessionFromDto(dto);
+    return this.intakeService.createAdvisorySessionFromDto(dto);
   }
 
   listBusinessMetrics(
@@ -137,11 +143,11 @@ export class ClientsService {
   }
 
   getPortfolioSummary(country?: string): Promise<PortfolioSummary> {
-    return this.queryService.getPortfolioSummary(country);
+    return this.summaryService.getPortfolioSummary(country);
   }
 
   seed(dto: SeedSimulationDto) {
-    return this.generatorService.seedCaseload({
+    return this.seedService.seedCaseload({
       clients: dto.clients ?? 100,
       country: dto.country,
       withHistory: dto.withHistory ?? true,

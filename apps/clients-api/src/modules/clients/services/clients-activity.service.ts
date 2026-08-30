@@ -1,39 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 
 import { AllConfigType } from 'src/config';
-import {
-  ActivityTickSource,
-  ClientStatus,
-  LoanStatus,
-  OUTSTANDING_LOAN_STATUSES,
-} from '../clients.constants';
-import { findCountryByIso3, ProgramCountry } from '../constants/countries';
+import { ActivityTickSource } from '../clients.constants';
 import { ActivityTick } from '../entities/activity-tick.entity';
-import { AdvisorySession } from '../entities/advisory-session.entity';
-import { Business } from '../entities/business.entity';
-import { BusinessMonthlyMetric } from '../entities/business-monthly-metric.entity';
-import { Client } from '../entities/client.entity';
-import { Loan } from '../entities/loan.entity';
-import { LoanRepayment } from '../entities/loan-repayment.entity';
-import { generateBusinessMetric } from '../helpers/business-metric-generator.helper';
-import { nextClientStatus } from '../helpers/client-generator.helper';
 import {
   decidePendingLoan,
   disburseLoan,
 } from '../helpers/loan-generator.helper';
-import {
-  ageDelinquentLoan,
-  generateRepayment,
-} from '../helpers/repayment-generator.helper';
-import {
-  getActivityTickMinutes,
-  getNextActivityTickAt,
-  ACTIVITY_TICK_CRON,
-} from '../helpers/clients-activity-schedule.helper';
-import { toPeriod } from '../helpers/simulation-format.helper';
 import { randomRange, scaleRange } from '../helpers/simulation-random.helper';
 import {
   ActivityTickOptions,
@@ -42,7 +18,21 @@ import {
   TriggerActivityTickResult,
 } from '../types/activity.types';
 import { ClientsGeneratorService } from './clients-generator.service';
-import { ClientsSequenceService } from './clients-sequence.service';
+import { ClientsLendingStepsService } from './clients-lending-steps.service';
+import { ClientsOutreachStepsService } from './clients-outreach-steps.service';
+import { ClientsSimulationStatusService } from './clients-simulation-status.service';
+
+/** Pending applications reviewed for a credit decision each tick. */
+const DECISIONS_PER_TICK = 25;
+
+/** Approved loans paid out each tick. */
+const DISBURSEMENTS_PER_TICK = 25;
+
+/** Late loans whose arrears are aged each tick. */
+const ARREARS_REVIEWED_PER_TICK = 20;
+
+/** Clients considered for a lifecycle move each tick. */
+const CLIENTS_REVIEWED_PER_TICK = 15;
 
 /**
  * Advances the simulated world by one step: new enrolments, loan decisions,
@@ -57,22 +47,12 @@ export class ClientsActivityService {
   private lastTick: ActivityTickResult | null = null;
 
   constructor(
-    @InjectRepository(Client)
-    private readonly clientRepository: Repository<Client>,
-    @InjectRepository(Business)
-    private readonly businessRepository: Repository<Business>,
-    @InjectRepository(Loan)
-    private readonly loanRepository: Repository<Loan>,
-    @InjectRepository(LoanRepayment)
-    private readonly repaymentRepository: Repository<LoanRepayment>,
-    @InjectRepository(AdvisorySession)
-    private readonly advisorySessionRepository: Repository<AdvisorySession>,
-    @InjectRepository(BusinessMonthlyMetric)
-    private readonly metricRepository: Repository<BusinessMonthlyMetric>,
     @InjectRepository(ActivityTick)
     private readonly tickRepository: Repository<ActivityTick>,
     private readonly generatorService: ClientsGeneratorService,
-    private readonly sequenceService: ClientsSequenceService,
+    private readonly lendingSteps: ClientsLendingStepsService,
+    private readonly outreachSteps: ClientsOutreachStepsService,
+    private readonly statusService: ClientsSimulationStatusService,
     private readonly configService: ConfigService<AllConfigType>,
   ) {}
 
@@ -123,47 +103,8 @@ export class ClientsActivityService {
     }
   }
 
-  async getStatus(): Promise<SimulationStatus> {
-    const clientsConfig = this.configService.getOrThrow('clients', {
-      infer: true,
-    });
-
-    const [
-      clients,
-      businesses,
-      loans,
-      repayments,
-      advisorySessions,
-      businessMetrics,
-      ticks,
-    ] = await Promise.all([
-      this.clientRepository.count(),
-      this.businessRepository.count(),
-      this.loanRepository.count(),
-      this.repaymentRepository.count(),
-      this.advisorySessionRepository.count(),
-      this.metricRepository.count(),
-      this.tickRepository.count(),
-    ]);
-
-    return {
-      cronEnabled: clientsConfig.cronEnabled,
-      tickCron: ACTIVITY_TICK_CRON,
-      tickMinutes: getActivityTickMinutes(),
-      nextTickAt: getNextActivityTickAt().toISOString(),
-      isRunning: this.isRunning,
-      countries: clientsConfig.countries,
-      lastTick: this.lastTick ?? (await this.loadLastTick()),
-      totals: {
-        clients,
-        businesses,
-        loans,
-        repayments,
-        advisorySessions,
-        businessMetrics,
-        ticks,
-      },
-    };
+  getStatus(): Promise<SimulationStatus> {
+    return this.statusService.getStatus(this.isRunning, this.lastTick);
   }
 
   private async executeTick(
@@ -179,12 +120,12 @@ export class ClientsActivityService {
       ? [this.generatorService.resolveConfiguredCountry(options.countryIso3)]
       : this.generatorService.configuredCountries;
 
-    const result: ActivityTickResult = this.emptyResult(source, startedAt);
+    const result = this.emptyResult(source, startedAt);
+    const volume = (range: { min: number; max: number }) =>
+      randomRange(scaleRange(range, intensity));
 
     // 1. New enrolments, each with the business they came to the program for.
-    const newClients = randomRange(
-      scaleRange(clientsConfig.newClientsPerTick, intensity),
-    );
+    const newClients = volume(clientsConfig.newClientsPerTick);
     for (let index = 0; index < newClients; index++) {
       const country = scope[index % scope.length];
       const enrolled = await this.generatorService.enrolClient({ country });
@@ -192,122 +133,53 @@ export class ClientsActivityService {
       if (enrolled.business) result.businessesCreated += 1;
     }
 
-    // 2. Fresh loan applications from businesses with nothing outstanding.
-    const applications = randomRange(
-      scaleRange(clientsConfig.loanApplicationsPerTick, intensity),
+    // 2-4. The lending cycle: apply, decide, disburse.
+    result.loansApplied = await this.lendingSteps.fileLoanApplications(
+      scope,
+      volume(clientsConfig.loanApplicationsPerTick),
     );
-    for (const business of await this.pickBusinessesWithoutOpenLoan(
+    await this.lendingSteps.decidePendingLoans(
       scope,
-      applications,
-    )) {
-      await this.generatorService.applyForLoan(business);
-      result.loansApplied += 1;
-    }
-
-    // 3. Credit decisions on everything still pending.
-    for (const loan of await this.pickLoansByStatus(
+      DECISIONS_PER_TICK,
+      decidePendingLoan,
+    );
+    result.loansDisbursed = await this.lendingSteps.disburseApprovedLoans(
       scope,
-      [LoanStatus.PENDING],
-      25,
-    )) {
-      loan.status = decidePendingLoan(loan);
-      await this.loanRepository.save(loan);
-    }
-
-    // 4. Disbursements.
-    for (const loan of await this.pickLoansByStatus(
-      scope,
-      [LoanStatus.APPROVED],
-      25,
-    )) {
-      Object.assign(loan, disburseLoan(loan));
-      await this.loanRepository.save(loan);
-      result.loansDisbursed += 1;
-    }
+      DISBURSEMENTS_PER_TICK,
+      (loan) => disburseLoan(loan),
+    );
 
     // 5. Installments against loans that are still owing.
-    const repaymentsTarget = randomRange(
-      scaleRange(clientsConfig.repaymentsPerTick, intensity),
-    );
-    const repaidLoanCodes = new Set<string>();
-    for (const loan of await this.pickLoansByStatus(
+    const repayments = await this.lendingSteps.recordRepayments(
       scope,
-      [...OUTSTANDING_LOAN_STATUSES],
-      repaymentsTarget,
-    )) {
-      const country = findCountryByIso3(loan.countryIso3);
-      if (!country) continue;
-
-      const sequence = await this.sequenceService.next(
-        'REPAYMENT',
-        country.isoAlpha3,
-      );
-      const { repayment, loanUpdate } = generateRepayment({
-        loan,
-        country,
-        sequence,
-        onTimeRate: clientsConfig.onTimeRepaymentRate,
-      });
-
-      await this.repaymentRepository.save(
-        this.repaymentRepository.create(repayment),
-      );
-      Object.assign(loan, loanUpdate);
-      await this.loanRepository.save(loan);
-
-      repaidLoanCodes.add(loan.loanCode);
-      result.repaymentsRecorded += 1;
-      if (loan.status === LoanStatus.REPAID) result.loansClosed += 1;
-    }
+      volume(clientsConfig.repaymentsPerTick),
+      clientsConfig.onTimeRepaymentRate,
+    );
+    result.repaymentsRecorded = repayments.repaymentsRecorded;
+    result.loansClosed = repayments.loansClosed;
 
     // 6. Arrears age on late loans that did not pay this tick.
-    for (const loan of await this.pickLoansByStatus(
+    result.loansClosed += await this.lendingSteps.ageDelinquentLoans(
       scope,
-      [LoanStatus.LATE],
-      20,
-    )) {
-      if (repaidLoanCodes.has(loan.loanCode)) continue;
-
-      const update = ageDelinquentLoan(loan, clientsConfig.defaultRate);
-      if (!update) continue;
-
-      Object.assign(loan, update);
-      await this.loanRepository.save(loan);
-      if (
-        loan.status === LoanStatus.DEFAULTED ||
-        loan.status === LoanStatus.WRITTEN_OFF
-      ) {
-        result.loansClosed += 1;
-      }
-    }
-
-    // 7. Advisory touchpoints.
-    const sessions = randomRange(
-      scaleRange(clientsConfig.advisorySessionsPerTick, intensity),
+      ARREARS_REVIEWED_PER_TICK,
+      clientsConfig.defaultRate,
+      repayments.repaidLoanCodes,
     );
-    for (const client of await this.pickActiveClients(scope, sessions)) {
-      const country = findCountryByIso3(client.countryIso3);
-      if (!country) continue;
 
-      const business = await this.businessRepository.findOne({
-        where: { clientCode: client.clientCode },
-      });
-      await this.generatorService.logAdvisorySession(
-        client,
-        country,
-        business?.businessCode ?? null,
+    // 7-9. Coaching, monthly results, and lifecycle moves.
+    result.advisorySessionsLogged =
+      await this.outreachSteps.logAdvisorySessions(
+        scope,
+        volume(clientsConfig.advisorySessionsPerTick),
       );
-      result.advisorySessionsLogged += 1;
-    }
-
-    // 8. Monthly business results, which also move the business's revenue on.
-    const metrics = randomRange(
-      scaleRange(clientsConfig.metricsPerTick, intensity),
+    result.metricsRecorded = await this.outreachSteps.recordBusinessMetrics(
+      scope,
+      volume(clientsConfig.metricsPerTick),
     );
-    result.metricsRecorded = await this.recordBusinessMetrics(scope, metrics);
-
-    // 9. Lifecycle moves for a slice of the caseload.
-    result.clientsUpdated = await this.advanceClientStatuses(scope, 15);
+    result.clientsUpdated = await this.outreachSteps.advanceClientStatuses(
+      scope,
+      CLIENTS_REVIEWED_PER_TICK,
+    );
 
     const finishedAt = new Date();
     result.finishedAt = finishedAt;
@@ -325,175 +197,6 @@ export class ClientsActivityService {
     );
 
     return result;
-  }
-
-  private async recordBusinessMetrics(
-    scope: ProgramCountry[],
-    limit: number,
-  ): Promise<number> {
-    const period = toPeriod(new Date());
-    let recorded = 0;
-
-    for (const business of await this.pickActiveBusinesses(scope, limit)) {
-      const country = findCountryByIso3(business.countryIso3);
-      if (!country) continue;
-
-      const hasActiveLoan = await this.loanRepository.exists({
-        where: {
-          businessCode: business.businessCode,
-          status: In([...OUTSTANDING_LOAN_STATUSES]),
-        },
-      });
-
-      const { metric, businessUpdate } = generateBusinessMetric({
-        business,
-        country,
-        hasActiveLoan,
-        period,
-      });
-
-      // One row per business per month: later ticks in the month refine it.
-      await this.metricRepository.upsert(this.metricRepository.create(metric), {
-        conflictPaths: ['businessCode', 'period'],
-      });
-      Object.assign(business, businessUpdate);
-      await this.businessRepository.save(business);
-      recorded += 1;
-    }
-
-    return recorded;
-  }
-
-  private async advanceClientStatuses(
-    scope: ProgramCountry[],
-    limit: number,
-  ): Promise<number> {
-    let updated = 0;
-
-    for (const client of await this.pickClientsForReview(scope, limit)) {
-      const status = nextClientStatus(client.status, client.enrolledOn);
-      if (status === client.status) continue;
-
-      client.status = status;
-      await this.clientRepository.save(client);
-      updated += 1;
-    }
-
-    return updated;
-  }
-
-  private async pickBusinessesWithoutOpenLoan(
-    scope: ProgramCountry[],
-    limit: number,
-  ): Promise<Business[]> {
-    if (limit <= 0) return [];
-
-    return this.businessRepository
-      .createQueryBuilder('business')
-      .where('business.countryIso3 IN (:...countries)', {
-        countries: scope.map((country) => country.isoAlpha3),
-      })
-      .andWhere('business.status = :status', { status: 'ACTIVE' })
-      .andWhere(
-        `NOT EXISTS (
-          SELECT 1 FROM loans loan
-          WHERE loan.business_code = business.business_code
-            AND loan.status IN (:...openStatuses)
-        )`,
-        {
-          openStatuses: [
-            LoanStatus.PENDING,
-            LoanStatus.APPROVED,
-            ...OUTSTANDING_LOAN_STATUSES,
-          ],
-        },
-      )
-      .orderBy('RANDOM()')
-      .limit(limit)
-      .getMany();
-  }
-
-  private async pickLoansByStatus(
-    scope: ProgramCountry[],
-    statuses: LoanStatus[],
-    limit: number,
-  ): Promise<Loan[]> {
-    if (limit <= 0) return [];
-
-    return this.loanRepository
-      .createQueryBuilder('loan')
-      .where('loan.countryIso3 IN (:...countries)', {
-        countries: scope.map((country) => country.isoAlpha3),
-      })
-      .andWhere('loan.status IN (:...statuses)', { statuses })
-      .orderBy('RANDOM()')
-      .limit(limit)
-      .getMany();
-  }
-
-  private async pickActiveClients(
-    scope: ProgramCountry[],
-    limit: number,
-  ): Promise<Client[]> {
-    if (limit <= 0) return [];
-
-    return this.clientRepository
-      .createQueryBuilder('client')
-      .where('client.countryIso3 IN (:...countries)', {
-        countries: scope.map((country) => country.isoAlpha3),
-      })
-      .andWhere('client.status IN (:...statuses)', {
-        statuses: [ClientStatus.ACTIVE, ClientStatus.ENROLLED],
-      })
-      .orderBy('RANDOM()')
-      .limit(limit)
-      .getMany();
-  }
-
-  private async pickActiveBusinesses(
-    scope: ProgramCountry[],
-    limit: number,
-  ): Promise<Business[]> {
-    if (limit <= 0) return [];
-
-    return this.businessRepository
-      .createQueryBuilder('business')
-      .where('business.countryIso3 IN (:...countries)', {
-        countries: scope.map((country) => country.isoAlpha3),
-      })
-      .andWhere('business.status = :status', { status: 'ACTIVE' })
-      .orderBy('RANDOM()')
-      .limit(limit)
-      .getMany();
-  }
-
-  private async pickClientsForReview(
-    scope: ProgramCountry[],
-    limit: number,
-  ): Promise<Client[]> {
-    if (limit <= 0) return [];
-
-    return this.clientRepository.find({
-      where: {
-        countryIso3: In(scope.map((country) => country.isoAlpha3)),
-        status: Not(In([ClientStatus.EXITED, ClientStatus.GRADUATED])),
-      },
-      order: { updatedAt: 'ASC' },
-      take: limit,
-    });
-  }
-
-  private async loadLastTick(): Promise<ActivityTickResult | null> {
-    const tick = await this.tickRepository.findOne({
-      where: {},
-      order: { id: 'DESC' },
-    });
-    if (!tick) return null;
-
-    const { id, createdAt, ...rest } = tick;
-    void id;
-    void createdAt;
-    return rest as ActivityTickResult;
   }
 
   private emptyResult(
