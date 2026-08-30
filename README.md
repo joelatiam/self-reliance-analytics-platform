@@ -8,7 +8,8 @@ See [`docs/design_report.md`](docs/design_report.md) for architecture, data mode
 
 ```
 apps/
-  ingestion/       World Bank + UNHCR API clients -> Postgres
+  clients-api/      Simulated source system (NestJS): client, business and loan activity
+  ingestion/        World Bank + UNHCR API clients -> Postgres
   cdc/              Debezium connector config + registration
   warehouse/        ClickHouse Kafka sources, raw tables, materialized views
   transformation/   dbt project (staging -> marts)
@@ -20,6 +21,7 @@ docker-compose.yml  Single-command stack
 
 Each app has its own README with details specific to it:
 
+- [apps/clients-api](apps/clients-api/README.md)
 - [apps/ingestion](apps/ingestion/README.md)
 - [apps/cdc](apps/cdc/README.md)
 - [apps/warehouse](apps/warehouse/README.md)
@@ -105,6 +107,8 @@ Configured via `.env` (`UNHCR_COUNTRIES`, using ISO3 codes, `UNHCR_YEAR_FROM`, `
 | Prometheus | http://localhost:9090 | none |
 | Grafana | http://localhost:3000 | `admin` / `admin` (see `.env`, `GRAFANA_ADMIN_*`) — "World Bank Pipeline Overview" dashboard is auto-provisioned |
 | Metrics exporter (raw) | http://localhost:9105/metrics | none |
+| Clients API (Swagger) | http://localhost:4000/docs | none by default (set `CLIENTS_API_KEY` to require `x-api-key`) |
+| Clients API Postgres | `localhost:5434` | `sr_app` / `sr_app_pw` (see `.env`) |
 
 All credentials above are local development defaults defined in `.env.example` — change them before deploying anywhere shared.
 
