@@ -167,14 +167,19 @@ def get_watermark(conn, resource: str) -> str | None:
 
 
 def set_watermark(conn, resource: str, watermark: str, rows_ingested: int) -> None:
-    """Advance the mark so the next run resumes from exactly here."""
+    """Advance the mark so the next run resumes from exactly here.
+
+    Only ever moves forward, so ordering between runs cannot corrupt it.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO ingestion_watermarks (resource, watermark, rows_ingested, updated_at)
             VALUES (%s, %s, %s, now())
             ON CONFLICT (resource) DO UPDATE SET
-                watermark = EXCLUDED.watermark,
+                -- GREATEST, not assignment: a run that finishes out of order
+                -- must never rewind the mark and make the next run re-read.
+                watermark = GREATEST(ingestion_watermarks.watermark, EXCLUDED.watermark),
                 rows_ingested = ingestion_watermarks.rows_ingested + EXCLUDED.rows_ingested,
                 updated_at = now();
             """,
