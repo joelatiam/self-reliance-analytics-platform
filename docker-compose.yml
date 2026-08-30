@@ -2,7 +2,8 @@ name: worldbank-indicators-pipeline
 
 x-airflow-common: &airflow-common
   build:
-    context: ./apps/orchestration
+    context: .
+    dockerfile: apps/orchestration/Dockerfile
   environment:
     AIRFLOW__CORE__EXECUTOR: SequentialExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
