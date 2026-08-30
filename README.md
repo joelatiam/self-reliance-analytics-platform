@@ -55,6 +55,7 @@ docker exec wb-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost
 
 # 3. ClickHouse raw layer — CDC landed the rows (FINAL dedupes ReplacingMergeTree versions)
 docker exec wb-clickhouse clickhouse-client -q "SELECT count() FROM worldbank.raw_observations FINAL"
+docker exec wb-clickhouse clickhouse-client -q "SELECT count() FROM worldbank.raw_refugee_statistics FINAL"
 
 # 4. dbt staging/marts — transformations ran
 docker exec wb-clickhouse clickhouse-client -q "SELECT count() FROM worldbank.mart_country_indicators"
@@ -65,15 +66,23 @@ curl -s http://localhost:8083/connectors/wb-postgres-source/status
 
 If Postgres and ClickHouse row counts (step 1 vs step 3) match, replication is caught up — this is exactly what the `wb_pipeline_cdc_lag_rows` metric in Grafana tracks continuously.
 
-## Data source
+## Data sources
 
-[World Bank Open Data API](https://api.worldbank.org/v2) — no authentication required, no API key needed. Example request used by the ingestion app:
+**[World Bank Open Data API](https://api.worldbank.org/v2)** — no authentication required. Example request used by the ingestion app:
 
 ```
 https://api.worldbank.org/v2/country/RW/indicator/NY.GDP.MKTP.KD.ZG?format=json&date=2018:2023
 ```
 
 Countries and indicators pulled are configured via `.env` (`WORLD_BANK_COUNTRIES`, `WORLD_BANK_INDICATORS`) — defaults to Inkomoko's five operating countries (Rwanda, Kenya, Ethiopia, South Sudan, Chad) and four economic/financial-inclusion indicators (GDP growth, unemployment, poverty headcount, account ownership).
+
+**[UNHCR Refugee Population Statistics API](https://api.unhcr.org/population/v1/population/)** — also no authentication required. Pulls yearly displacement data (refugees, asylum seekers, IDPs, stateless persons) hosted by each of the same five countries:
+
+```
+https://api.unhcr.org/population/v1/population/?coa=RWA&yearFrom=2015&yearTo=2023
+```
+
+Configured via `.env` (`UNHCR_COUNTRIES`, using ISO3 codes, `UNHCR_YEAR_FROM`, `UNHCR_YEAR_TO`). Note: the API returns no rows for Chad (`TCD`) as a host country — a real data gap upstream, not a pipeline issue.
 
 ## Accessing things
 

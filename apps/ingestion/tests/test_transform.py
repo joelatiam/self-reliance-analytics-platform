@@ -3,7 +3,12 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from transform import parse_country, parse_indicator, parse_observation  # noqa: E402
+from transform import (  # noqa: E402
+    parse_country,
+    parse_indicator,
+    parse_observation,
+    parse_refugee_stat,
+)
 
 
 def test_parse_country_maps_expected_fields():
@@ -66,6 +71,40 @@ def test_parse_observation_maps_expected_fields():
 def test_parse_observation_returns_none_when_value_missing_fields():
     raw = {"indicator": {}, "country": {}, "date": None, "value": None}
     assert parse_observation(raw) is None
+
+
+def test_parse_refugee_stat_maps_expected_fields():
+    raw = {
+        "year": 2023,
+        "coa_iso": "RWA",
+        "coa_name": "Rwanda",
+        "refugees": 115643,
+        "asylum_seekers": 12660,
+        "returned_refugees": 325,
+        "idps": "0",
+        "returned_idps": "-",
+        "stateless": 9500,
+        "ooc": 7060,
+        "hst": 12139,
+    }
+    result = parse_refugee_stat(raw)
+    assert result == {
+        "country_iso3": "RWA",
+        "year": 2023,
+        "refugees": 115643,
+        "asylum_seekers": 12660,
+        "returned_refugees": 325,
+        "idps": 0,
+        "returned_idps": None,
+        "stateless": 9500,
+        "others_of_concern": 7060,
+        "host_community": 12139,
+    }
+
+
+def test_parse_refugee_stat_returns_none_without_asylum_country():
+    raw = {"year": 2023, "coa_iso": "-", "refugees": 100}
+    assert parse_refugee_stat(raw) is None
 
 
 def test_parse_observation_handles_null_value():

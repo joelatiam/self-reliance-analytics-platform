@@ -53,7 +53,33 @@ def parse_observation(raw: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def parse_refugee_stat(raw: dict[str, Any]) -> dict[str, Any] | None:
+    country_iso3 = raw.get("coa_iso")
+    year = raw.get("year")
+    if not country_iso3 or country_iso3 == "-" or year is None:
+        return None
+
+    return {
+        "country_iso3": country_iso3,
+        "year": int(year),
+        "refugees": _to_int(raw.get("refugees")),
+        "asylum_seekers": _to_int(raw.get("asylum_seekers")),
+        "returned_refugees": _to_int(raw.get("returned_refugees")),
+        "idps": _to_int(raw.get("idps")),
+        "returned_idps": _to_int(raw.get("returned_idps")),
+        "stateless": _to_int(raw.get("stateless")),
+        "others_of_concern": _to_int(raw.get("ooc")),
+        "host_community": _to_int(raw.get("hst")),
+    }
+
+
 def _to_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
     return float(value)
+
+
+def _to_int(value: Any) -> int | None:
+    if value is None or value == "" or value == "-":
+        return None
+    return int(value)

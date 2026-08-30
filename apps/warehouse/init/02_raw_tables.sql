@@ -47,3 +47,22 @@ CREATE TABLE IF NOT EXISTS worldbank.raw_observations
 )
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_code, indicator_code, year);
+
+CREATE TABLE IF NOT EXISTS worldbank.raw_refugee_statistics
+(
+    country_iso3       String,
+    year               Int32,
+    refugees           Nullable(Int64),
+    asylum_seekers     Nullable(Int64),
+    returned_refugees  Nullable(Int64),
+    idps               Nullable(Int64),
+    returned_idps      Nullable(Int64),
+    stateless          Nullable(Int64),
+    others_of_concern  Nullable(Int64),
+    host_community     Nullable(Int64),
+    op                 LowCardinality(String),
+    ts_ms              Int64,
+    _loaded_at         DateTime DEFAULT now()
+)
+ENGINE = ReplacingMergeTree(ts_ms)
+ORDER BY (country_iso3, year);

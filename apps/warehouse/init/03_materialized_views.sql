@@ -44,3 +44,21 @@ SELECT
     JSONExtract(json, 'ts_ms', 'Int64')                           AS ts_ms
 FROM worldbank.kafka_observations
 WHERE JSONExtract(json, 'op', 'String') != 'd';
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_refugee_statistics
+    TO worldbank.raw_refugee_statistics AS
+SELECT
+    JSONExtract(json, 'after', 'country_iso3', 'String')               AS country_iso3,
+    JSONExtract(json, 'after', 'year', 'Int32')                        AS year,
+    JSONExtract(json, 'after', 'refugees', 'Nullable(Int64)')          AS refugees,
+    JSONExtract(json, 'after', 'asylum_seekers', 'Nullable(Int64)')    AS asylum_seekers,
+    JSONExtract(json, 'after', 'returned_refugees', 'Nullable(Int64)') AS returned_refugees,
+    JSONExtract(json, 'after', 'idps', 'Nullable(Int64)')              AS idps,
+    JSONExtract(json, 'after', 'returned_idps', 'Nullable(Int64)')     AS returned_idps,
+    JSONExtract(json, 'after', 'stateless', 'Nullable(Int64)')         AS stateless,
+    JSONExtract(json, 'after', 'others_of_concern', 'Nullable(Int64)') AS others_of_concern,
+    JSONExtract(json, 'after', 'host_community', 'Nullable(Int64)')    AS host_community,
+    JSONExtract(json, 'op', 'String')                                  AS op,
+    JSONExtract(json, 'ts_ms', 'Int64')                                AS ts_ms
+FROM worldbank.kafka_refugee_statistics
+WHERE JSONExtract(json, 'op', 'String') != 'd';
