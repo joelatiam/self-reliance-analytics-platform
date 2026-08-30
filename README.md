@@ -67,7 +67,7 @@ docker compose down -v && docker compose up -d
 Trigger a full pipeline run (or just wait for the 6-hourly schedule):
 
 ```bash
-docker exec wb-airflow-scheduler airflow dags trigger worldbank_indicators_pipeline
+docker exec wb-airflow-scheduler airflow dags trigger country_indicators_pipeline
 ```
 
 The client activity pipeline runs itself every ten minutes, but you can force a pass:
