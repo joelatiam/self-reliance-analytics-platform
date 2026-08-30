@@ -1,9 +1,9 @@
-worldbank_indicators:
+self_reliance_analytics:
   target: dev
   outputs:
     dev:
       type: clickhouse
-      schema: "{{ env_var('CLICKHOUSE_DB', 'worldbank') }}"
+      schema: "{{ env_var('CLICKHOUSE_DB', 'self_reliance') }}"
       host: "{{ env_var('CLICKHOUSE_HOST', 'localhost') }}"
       port: "{{ env_var('CLICKHOUSE_HTTP_PORT', '8123') | as_number }}"
       user: "{{ env_var('CLICKHOUSE_USER', 'default') }}"

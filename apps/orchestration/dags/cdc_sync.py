@@ -19,7 +19,7 @@ CDC_SYNC_POLL_SECONDS = 6
 
 # Must match the database the warehouse init SQL creates
 # (apps/warehouse/init/01_kafka_sources.sql) and dbt writes into.
-CLICKHOUSE_DB = os.environ.get("CLICKHOUSE_DB", "worldbank")
+CLICKHOUSE_DB = os.environ.get("CLICKHOUSE_DB", "self_reliance")
 
 
 def postgres_row_count(table: str) -> int:

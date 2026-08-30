@@ -11,9 +11,9 @@ render_connector_config() {
   sed \
     -e "s|\${POSTGRES_HOST}|${POSTGRES_HOST:-postgres}|g" \
     -e "s|\${POSTGRES_PORT}|${POSTGRES_PORT:-5432}|g" \
-    -e "s|\${POSTGRES_DB}|${POSTGRES_DB:-worldbank}|g" \
-    -e "s|\${POSTGRES_USER}|${POSTGRES_USER:-wb_app}|g" \
-    -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD:-wb_app_pw}|g" \
+    -e "s|\${POSTGRES_DB}|${POSTGRES_DB:-self_reliance}|g" \
+    -e "s|\${POSTGRES_USER}|${POSTGRES_USER:-sr_app}|g" \
+    -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD:-sr_app_pw}|g" \
     debezium/postgres-connector.json
 }
 
@@ -22,8 +22,8 @@ until curl -sf "$CONNECT_URL/connectors" >/dev/null 2>&1; do
   sleep 3
 done
 
-if curl -sf "$CONNECT_URL/connectors/wb-postgres-source" >/dev/null 2>&1; then
-  echo "Connector wb-postgres-source already registered, skipping."
+if curl -sf "$CONNECT_URL/connectors/sr-postgres-source" >/dev/null 2>&1; then
+  echo "Connector sr-postgres-source already registered, skipping."
   exit 0
 fi
 

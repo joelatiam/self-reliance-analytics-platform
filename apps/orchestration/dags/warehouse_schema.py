@@ -4,7 +4,7 @@ The mirror of ingestion's schema bootstrap. ClickHouse, like Postgres, only runs
 /docker-entrypoint-initdb.d against an *empty* data directory, so tables added
 after a volume was created never appear in it: the client-activity raw tables
 were missing from a warehouse that otherwise looked healthy, and the DAG failed
-with a bare 404 on `worldbank.raw_clients`.
+with a bare 404 on `self_reliance.raw_clients`.
 
 Every statement in warehouse/init is CREATE ... IF NOT EXISTS, so re-applying is
 a no-op that costs a few hundred milliseconds.

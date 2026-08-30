@@ -1,5 +1,5 @@
 {
-  "uid": "wb-pipeline-overview",
+  "uid": "self-reliance-pipeline-overview",
   "title": "Pipeline Overview",
   "schemaVersion": 39,
   "version": 2,
@@ -21,7 +21,7 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_cdc_lag_rows",
+          "expr": "sr_pipeline_cdc_lag_rows",
           "refId": "A"
         }
       ],
@@ -60,7 +60,7 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_cdc_lag_seconds",
+          "expr": "sr_pipeline_cdc_lag_seconds",
           "refId": "A"
         }
       ],
@@ -100,7 +100,7 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_scrape_success",
+          "expr": "sr_pipeline_scrape_success",
           "refId": "A"
         }
       ],
@@ -137,12 +137,12 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_postgres_observations_total",
+          "expr": "sr_pipeline_postgres_observations_total",
           "legendFormat": "postgres",
           "refId": "A"
         },
         {
-          "expr": "wb_pipeline_clickhouse_observations_total",
+          "expr": "sr_pipeline_clickhouse_observations_total",
           "legendFormat": "clickhouse",
           "refId": "B"
         }
@@ -161,7 +161,7 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_cdc_lag_rows_by_table",
+          "expr": "sr_pipeline_cdc_lag_rows_by_table",
           "legendFormat": "{{table}}",
           "refId": "A"
         }
@@ -185,7 +185,7 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_ingestion_watermark_age_seconds",
+          "expr": "sr_pipeline_ingestion_watermark_age_seconds",
           "legendFormat": "{{resource}}",
           "refId": "A"
         }
@@ -203,12 +203,12 @@
       },
       "targets": [
         {
-          "expr": "wb_pipeline_postgres_rows_total",
+          "expr": "sr_pipeline_postgres_rows_total",
           "legendFormat": "postgres {{table}}",
           "refId": "A"
         },
         {
-          "expr": "wb_pipeline_clickhouse_rows_total",
+          "expr": "sr_pipeline_clickhouse_rows_total",
           "legendFormat": "clickhouse {{table}}",
           "refId": "B"
         }

@@ -1,5 +1,5 @@
 {
-  "name": "wb-postgres-source",
+  "name": "sr-postgres-source",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "database.hostname": "${POSTGRES_HOST}",
@@ -7,10 +7,10 @@
     "database.user": "${POSTGRES_USER}",
     "database.password": "${POSTGRES_PASSWORD}",
     "database.dbname": "${POSTGRES_DB}",
-    "topic.prefix": "wb",
+    "topic.prefix": "sr",
     "table.include.list": "public.countries,public.indicators,public.observations,public.refugee_statistics,public.clients,public.businesses,public.loans,public.loan_repayments,public.advisory_sessions,public.business_monthly_metrics",
     "plugin.name": "pgoutput",
-    "slot.name": "wb_debezium_slot",
+    "slot.name": "sr_debezium_slot",
     "publication.autocreate.mode": "filtered",
     "snapshot.mode": "initial",
     "key.converter": "org.apache.kafka.connect.json.JsonConverter",

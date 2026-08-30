@@ -43,7 +43,7 @@ jobs:
       clickhouse:
         image: clickhouse/clickhouse-server:24.8
         env:
-          CLICKHOUSE_DB: worldbank
+          CLICKHOUSE_DB: self_reliance
           CLICKHOUSE_PASSWORD: ci_password
         ports:
           - 8123:8123
@@ -75,7 +75,7 @@ jobs:
         env:
           CLICKHOUSE_HOST: 127.0.0.1
           CLICKHOUSE_HTTP_PORT: "8123"
-          CLICKHOUSE_DB: worldbank
+          CLICKHOUSE_DB: self_reliance
           CLICKHOUSE_USER: default
           CLICKHOUSE_PASSWORD: ci_password
           DBT_PROFILES_DIR: .

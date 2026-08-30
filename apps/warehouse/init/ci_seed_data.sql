@@ -1,17 +1,17 @@
 -- Representative rows for CI, standing in for what CDC would normally land.
 -- Not mounted into the real docker-entrypoint-initdb.d flow.
-INSERT INTO worldbank.raw_countries
+INSERT INTO self_reliance.raw_countries
     (iso2_code, iso3_code, name, region, income_level, capital_city, longitude, latitude, op, ts_ms)
 VALUES
     ('RW', 'RWA', 'Rwanda', 'Sub-Saharan Africa', 'Low income', 'Kigali', 30.06, -1.94, 'r', 1000),
     ('KE', 'KEN', 'Kenya', 'Sub-Saharan Africa', 'Lower middle income', 'Nairobi', 36.82, -1.29, 'r', 1000);
 
-INSERT INTO worldbank.raw_indicators
+INSERT INTO self_reliance.raw_indicators
     (code, name, source_note, source_organization, op, ts_ms)
 VALUES
     ('NY.GDP.MKTP.KD.ZG', 'GDP growth (annual %)', 'Annual GDP growth rate.', 'World Bank', 'r', 1000);
 
-INSERT INTO worldbank.raw_observations
+INSERT INTO self_reliance.raw_observations
     (country_code, indicator_code, year, value, unit, obs_status, decimal_places, op, ts_ms)
 VALUES
     ('RW', 'NY.GDP.MKTP.KD.ZG', 2022, 9.82, NULL, NULL, 1, 'r', 1000),
@@ -19,7 +19,7 @@ VALUES
     ('KE', 'NY.GDP.MKTP.KD.ZG', 2022, 5.6, NULL, NULL, 1, 'r', 1000),
     ('KE', 'NY.GDP.MKTP.KD.ZG', 2023, 5.0, NULL, NULL, 1, 'r', 1000);
 
-INSERT INTO worldbank.raw_refugee_statistics
+INSERT INTO self_reliance.raw_refugee_statistics
     (country_iso3, year, refugees, asylum_seekers, returned_refugees, idps, returned_idps, stateless, others_of_concern, host_community, op, ts_ms)
 VALUES
     ('RWA', 2022, 120753, 478, 932, 0, 0, 9500, 6515, 11972, 'r', 1000),
@@ -30,7 +30,7 @@ VALUES
 -- Client activity. Two clients per country with contrasting profiles: a
 -- displaced borrower who repays on time and a host-community borrower who falls
 -- into arrears, so the mart tests exercise both the on-time and at-risk paths.
-INSERT INTO worldbank.raw_clients
+INSERT INTO self_reliance.raw_clients
     (client_code, first_name, last_name, gender, birth_year, is_youth, country_iso3, country_iso2,
      location_name, region, in_camp, displacement_status, origin_country_iso3, arrival_year,
      household_size, dependents, education_level, primary_language, program_track, cohort,
@@ -53,7 +53,7 @@ VALUES
      4, 2, 'SECONDARY', 'Swahili', 'MARKET_ACCESS', '2025-Q3',
      '2025-08-15', 'SR-ADV-KEN-009', 'ACTIVE', 'r', 1000);
 
-INSERT INTO worldbank.raw_businesses
+INSERT INTO self_reliance.raw_businesses
     (business_code, client_code, name, sector, sub_sector, stage, registration_status, market_access,
      country_iso3, location_name, started_year, employees_full_time, employees_part_time,
      employees_female, employees_displaced, currency, monthly_revenue_local, monthly_revenue_usd,
@@ -72,7 +72,7 @@ VALUES
      'STARTUP', 'INFORMAL', 'HOST_MARKET', 'KEN', 'Lodwar', 2024, 1, 0,
      0, 0, 'KES', 38700.00, 300.00, 90.00, 260.00, 'ACTIVE', 'r', 1000);
 
-INSERT INTO worldbank.raw_loans
+INSERT INTO self_reliance.raw_loans
     (loan_code, client_code, business_code, country_iso3, loan_cycle, currency, principal_local,
      principal_usd, interest_rate_annual, term_months, purpose, risk_grade, applied_on, disbursed_on,
      maturity_on, installments_total, installments_paid, total_repayable_usd, amount_repaid_usd,
@@ -91,7 +91,7 @@ VALUES
      400.00, 15.00, 9, 'WORKING_CAPITAL', 'D', '2025-09-01', '2025-09-08',
      '2026-06-08', 9, 1, 445.00, 49.44, 395.56, 62, 'LATE', 'r', 1000);
 
-INSERT INTO worldbank.raw_loan_repayments
+INSERT INTO self_reliance.raw_loan_repayments
     (repayment_code, loan_code, client_code, country_iso3, installment_number, currency,
      amount_local, amount_usd, due_on, paid_at, days_late, on_time, method, op, ts_ms)
 VALUES
@@ -108,7 +108,7 @@ VALUES
     ('SR-R-KEN-000003', 'SR-L-KEN-000002', 'SR-C-KEN-000002', 'KEN', 1, 'KES',
      6378.00, 49.44, '2026-01-08', '2026-03-11 12:00:00.000', 62, 0, 'CASH', 'r', 1000);
 
-INSERT INTO worldbank.raw_advisory_sessions
+INSERT INTO self_reliance.raw_advisory_sessions
     (session_code, client_code, business_code, country_iso3, advisor_code, session_type, topic,
      language, delivered_at, duration_minutes, attended, satisfaction_score, op, ts_ms)
 VALUES
@@ -119,7 +119,7 @@ VALUES
     ('SR-A-KEN-000001', 'SR-C-KEN-000001', 'SR-B-KEN-000001', 'KEN', 'SR-ADV-KEN-004',
      'MARKET_LINKAGE', 'Market linkage to host traders', 'Somali', '2026-02-20 09:30:00.000', 120, 1, 4, 'r', 1000);
 
-INSERT INTO worldbank.raw_business_monthly_metrics
+INSERT INTO self_reliance.raw_business_monthly_metrics
     (business_code, period, client_code, country_iso3, currency, revenue_local, revenue_usd,
      profit_usd, employees_total, customers_served, revenue_growth_pct, op, ts_ms)
 VALUES
