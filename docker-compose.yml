@@ -116,6 +116,10 @@ services:
     build:
       context: ./apps/cdc
     container_name: wb-connector-init
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-worldbank}
+      POSTGRES_USER: ${POSTGRES_USER:-wb_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wb_app_pw}
     depends_on:
       kafka-connect:
         condition: service_healthy
