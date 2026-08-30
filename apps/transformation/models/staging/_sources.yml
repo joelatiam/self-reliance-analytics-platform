@@ -8,3 +8,9 @@ sources:
       - name: raw_indicators
       - name: raw_observations
       - name: raw_refugee_statistics
+      - name: raw_clients
+      - name: raw_businesses
+      - name: raw_loans
+      - name: raw_loan_repayments
+      - name: raw_advisory_sessions
+      - name: raw_business_monthly_metrics

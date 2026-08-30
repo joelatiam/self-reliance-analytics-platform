@@ -8,7 +8,7 @@
     "database.password": "wb_app_pw",
     "database.dbname": "worldbank",
     "topic.prefix": "wb",
-    "table.include.list": "public.countries,public.indicators,public.observations,public.refugee_statistics",
+    "table.include.list": "public.countries,public.indicators,public.observations,public.refugee_statistics,public.clients,public.businesses,public.loans,public.loan_repayments,public.advisory_sessions,public.business_monthly_metrics",
     "plugin.name": "pgoutput",
     "slot.name": "wb_debezium_slot",
     "publication.autocreate.mode": "filtered",
@@ -18,6 +18,7 @@
     "key.converter.schemas.enable": "false",
     "value.converter.schemas.enable": "false",
     "tombstones.on.delete": "false",
-    "heartbeat.interval.ms": "10000"
+    "heartbeat.interval.ms": "10000",
+    "decimal.handling.mode": "double"
   }
 }

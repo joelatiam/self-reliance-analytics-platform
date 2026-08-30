@@ -27,19 +27,30 @@ Everything runs from `docker-compose.yml`; a single `docker compose up -d` start
 ## 2. Data flow
 
 1. **Ingestion** (`apps/ingestion`): pulls country metadata, indicator metadata, and yearly observations from the [World Bank Open Data API](https://api.worldbank.org/v2) for the program's five operating countries (Rwanda, Kenya, Ethiopia, South Sudan, Chad) and upserts them into Postgres (`countries`, `indicators`, `observations`). A second source, the [UNHCR Refugee Population Statistics API](https://api.unhcr.org/population/v1/population/), pulls yearly displacement data (refugees, asylum seekers, IDPs, stateless persons, host community) *hosted by* each of those same countries into `refugee_statistics` — this is the population the program's lending actually serves, sitting alongside the economic indicators. Both sources run as parallel Airflow tasks feeding the same CDC path. Note: the UNHCR API returns no data for Chad (`TCD`) as a host country in this query — a real data gap, not a pipeline bug.
-2. **CDC** (`apps/cdc`, `apps/warehouse`): Debezium's Postgres connector reads the write-ahead log via logical replication (`pgoutput`) and emits change events to Kafka topics (`wb.public.countries`, `wb.public.indicators`, `wb.public.observations`). ClickHouse consumes these topics through `Kafka`-engine tables and a materialized view per table lands the parsed rows into `ReplacingMergeTree` tables (`raw_countries`, `raw_indicators`, `raw_observations`) — this is the near-real-time replication path required by the assessment, with no batch reload of Postgres involved.
-3. **Transformation** (`apps/transformation`): dbt reads the CDC-landed raw tables as sources, builds deduplicated staging views, and denormalizes them into two analytics-ready marts.
-4. **Orchestration** (`apps/orchestration`): one Airflow DAG (`worldbank_indicators_pipeline`) runs `ingest_worldbank_api → wait_for_cdc_sync → dbt_build` on a schedule (every 6 hours) and on demand.
-5. **Observability** (`apps/observability`): a small custom Prometheus exporter reports CDC replication lag (both in rows and seconds) and scrape health; ClickHouse's built-in `/metrics` endpoint reports internal resource/query metrics; Grafana visualizes both.
+1b. **Operational source** (`apps/clients-api`): the two public APIs above are yearly country aggregates — nothing about individual entrepreneurs, and no such dataset is public, since it would be personal data about displaced people. So the operational layer is a source system we built: a NestJS service holding clients, businesses, loans, repayments, advisory sessions and monthly business results, generating fresh activity on the 5th, 15th, 25th, ... minute. **All of its data is generated**; phone numbers are masked by construction. It is distributed across countries by hosted displaced population and uses the real origin mix per host country, so the marts behave like the real thing without containing anyone real. Ingestion pulls it **incrementally** — one watermark per resource in `ingestion_watermarks`, `?updatedSince=` on the API — on a ten-minute DAG offset five minutes from the source's write schedule, so every pull reads settled data. This is what gives the platform a genuinely fast-moving, row-level CDC workload rather than yearly aggregates that change once a year.
+2. **CDC** (`apps/cdc`, `apps/warehouse`): Debezium's Postgres connector reads the write-ahead log via logical replication (`pgoutput`) and emits change events to Kafka topics (`wb.public.<table>`, for all ten replicated tables). ClickHouse consumes these topics through `Kafka`-engine tables and a materialized view per table lands the parsed rows into `ReplacingMergeTree` tables (`raw_countries`, `raw_indicators`, `raw_observations`) — this is the near-real-time replication path required by the assessment, with no batch reload of Postgres involved.
+3. **Transformation** (`apps/transformation`): dbt reads the CDC-landed raw tables as sources, builds deduplicated staging views, and denormalizes them into analytics-ready marts. `FINAL` matters far more on the operational tables than the aggregates: a loan row is re-replicated on every repayment, so the same key lands many times.
+4. **Orchestration** (`apps/orchestration`): two Airflow DAGs, because the sources move at completely different speeds. `worldbank_indicators_pipeline` runs the aggregates every 6 hours; `client_activity_pipeline` runs `ingest_client_activity → wait_for_cdc_sync → dbt_build_client_models` every 10 minutes. Yearly data on a ten-minute schedule would be waste; operational data on a six-hourly one would be six hours stale. Both share one `wait_for_cdc_sync` helper.
+5. **Observability** (`apps/observability`): a small custom Prometheus exporter reports CDC replication lag (in rows and seconds), per-table row counts so one stalled topic cannot hide behind a healthy total, per-resource ingestion watermark age — the fastest signal that the ten-minute pull has stopped progressing — and scrape health. ClickHouse's built-in `/metrics` endpoint reports internal resource/query metrics; Grafana visualizes both.
 
 ## 3. Data model / schema
 
 ### Entity relationship
 
+Two subject areas share one warehouse: yearly country context, and row-level
+operational activity that joins to it on `country_iso3`.
+
 ```mermaid
 erDiagram
     COUNTRIES ||--o{ OBSERVATIONS : has
     INDICATORS ||--o{ OBSERVATIONS : has
+    COUNTRIES ||--o{ REFUGEE_STATISTICS : hosts
+    COUNTRIES ||--o{ CLIENTS : "serves in"
+    CLIENTS ||--o{ BUSINESSES : runs
+    CLIENTS ||--o{ ADVISORY_SESSIONS : receives
+    BUSINESSES ||--o{ LOANS : financed_by
+    BUSINESSES ||--o{ BUSINESS_MONTHLY_METRICS : reports
+    LOANS ||--o{ LOAN_REPAYMENTS : repaid_by
 
     COUNTRIES {
         string iso2_code PK
@@ -59,6 +70,53 @@ erDiagram
         int year
         float value
     }
+    REFUGEE_STATISTICS {
+        string country_iso3 FK
+        int year
+        bigint refugees
+        bigint idps
+    }
+    CLIENTS {
+        string client_code PK
+        string country_iso3 FK
+        string displacement_status
+        string origin_country_iso3
+        string status
+    }
+    BUSINESSES {
+        string business_code PK
+        string client_code FK
+        string sector
+        decimal monthly_revenue_usd
+        decimal baseline_monthly_revenue_usd
+    }
+    LOANS {
+        string loan_code PK
+        string business_code FK
+        decimal principal_usd
+        decimal outstanding_usd
+        int days_past_due
+        string status
+    }
+    LOAN_REPAYMENTS {
+        string repayment_code PK
+        string loan_code FK
+        decimal amount_usd
+        int days_late
+        bool on_time
+    }
+    ADVISORY_SESSIONS {
+        string session_code PK
+        string client_code FK
+        string session_type
+        bool attended
+    }
+    BUSINESS_MONTHLY_METRICS {
+        string business_code FK
+        string period
+        decimal revenue_usd
+        decimal revenue_growth_pct
+    }
 ```
 
 This shape is identical across Postgres (OLTP), the ClickHouse raw/CDC layer, and the dbt staging layer — only the mart layer denormalizes it.
@@ -69,6 +127,12 @@ This shape is identical across Postgres (OLTP), the ClickHouse raw/CDC layer, an
 - **Staging (`apps/transformation/models/staging`)**: thin, typed views over the raw layer with `FINAL` applied (forces dedup at query time, since `ReplacingMergeTree` merges happen asynchronously in the background) and light null-filtering.
 - **Marts (`apps/transformation/models/marts`)**: `mart_country_indicators` denormalizes observations with country/indicator names into one analytics-ready fact table; `mart_indicator_yoy_growth` builds on it with a `lagInFrame` window function for year-over-year change — a genuine transformation step, not just a join. `mart_country_refugee_stats` denormalizes UNHCR displacement data with country context and adds a derived `total_displaced_hosted` rollup (refugees + asylum seekers + IDPs + stateless, null-safe).
 
+  On the operational side: `mart_client_portfolio` (caseload composition and jobs per country), `mart_loan_performance` (lending book by disbursement month, with portfolio-at-risk measured at 30 days past due, the microfinance convention), `mart_repayment_performance` (on-time rate and arrears by the month payment actually landed), and `mart_business_growth` (revenue growth against the baseline captured at enrolment, by country and sector).
+
+  `mart_country_program_context` is the model the whole platform exists for: it sets what the program is doing on the ground against the displacement and economic context it is doing it in, expressing reach as `displaced_clients_per_10k_hosted` — a percentage of a displaced population that size rounds to 0.0 and tells the reader nothing.
+
+  Definitions that could drift (`is_displaced`, `is_at_risk`, `is_outstanding`) live once in the staging layer rather than being re-expressed in every mart.
+
 ### ClickHouse-specific design choices
 
 | Choice | Rationale |
@@ -77,6 +141,9 @@ This shape is identical across Postgres (OLTP), the ClickHouse raw/CDC layer, an
 | `ORDER BY (country_code, indicator_code, year)` on raw/staging-adjacent tables | Matches both the natural dedup key and the dominant query pattern (filter/join by country + indicator + year), so ClickHouse's sparse primary index actually helps. |
 | `ORDER BY (indicator_code, country_code, year)` + `PARTITION BY indicator_code` on marts | Typical analytics queries slice by indicator first ("show GDP growth trends"); partitioning on it lets ClickHouse skip irrelevant partitions entirely. |
 | `JSONAsString` Kafka tables + `JSONExtract` in materialized views, rather than declaring Debezium's nested schema on the Kafka table itself | Avoids a brittle, verbose schema declaration and tolerates minor envelope differences across Debezium versions. |
+| `ORDER BY (country_iso3, <entity>_code)` on client-activity raw tables | Country is the dominant filter across every operational mart, and the entity code completes the dedup key. |
+| `decimal.handling.mode=double` on the connector | Debezium's default sends `NUMERIC` as base64 bytes; every money column in the client-activity tables would need decoding in ClickHouse. Trades exact-decimal fidelity for legibility, which is the right way round for figures already rounded to cents. |
+| `LowCardinality(...)` on status, sector, currency and similar columns | These are small closed vocabularies repeated across hundreds of thousands of rows; dictionary-encoding them is close to free and materially shrinks the operational tables. |
 
 ## 4. Observability design
 
@@ -94,6 +161,8 @@ This shape is identical across Postgres (OLTP), the ClickHouse raw/CDC layer, an
 - **No Kafka / Kafka Connect JMX metrics** are exposed to Prometheus (would need a JMX exporter java agent alongside Kafka Connect).
 - **No alerting rules** are configured (would add Alertmanager with thresholds on the lag/freshness metrics above).
 - **Dimension tables (`countries`, `indicators`) are replicated like the fact table** rather than treated as slowly-changing dimensions — fine at this scale, but worth revisiting if attributes like `income_level` change meaningfully over time and history needs to be preserved.
+- **The operational source is simulated, and that is a real limitation, not just a caveat.** Every client, business, loan and repayment in `apps/clients-api` is generated. The distributions are built from published figures — hosted displaced population per country, origin mix per host country, sector-typical loan sizes, on-time repayment in the low nineties — so the marts behave plausibly, but nothing here is evidence about the real world. It demonstrates that the pipeline handles a fast-moving, row-level operational source correctly; it says nothing about what such a program's actual portfolio looks like. Pointed at a real system, the ingestion contract (paged, `updatedSince`, one watermark per resource) is what would carry over; the generator would be thrown away.
+- **Client-activity ingestion trusts the source's `updated_at`.** If the source were to write a row with a timestamp earlier than the stored watermark — a clock skew, a backdated correction — that row would be skipped. A production version would either use a monotonic change sequence rather than a wall-clock timestamp, or re-read a short overlap window on each pass and rely on the upsert to absorb the duplicates.
 
 ## 6. Scaling this pipeline
 

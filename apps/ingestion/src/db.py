@@ -109,3 +109,74 @@ def upsert_observations(conn, observations: list[dict[str, Any]]) -> int:
     with conn.cursor() as cur:
         psycopg2.extras.execute_batch(cur, sql, observations)
     return len(observations)
+
+
+# --- Clients API (operational client activity) ---------------------------------
+
+# Primary key per resource. Everything else about the upsert is derived from the
+# parsed row itself, so adding a column to a parser needs no change here.
+CLIENT_ACTIVITY_KEYS = {
+    "clients": ["client_code"],
+    "businesses": ["business_code"],
+    "loans": ["loan_code"],
+    "loan_repayments": ["repayment_code"],
+    "advisory_sessions": ["session_code"],
+    "business_monthly_metrics": ["business_code", "period"],
+}
+
+
+def upsert_client_activity(conn, resource: str, rows: list[dict[str, Any]]) -> int:
+    """Upsert a page of rows for one clients API resource."""
+    if not rows:
+        return 0
+
+    key_columns = CLIENT_ACTIVITY_KEYS.get(resource)
+    if key_columns is None:
+        raise ValueError(f"Unknown clients API resource: {resource}")
+
+    columns = list(rows[0].keys())
+    placeholders = ", ".join(f"%({column})s" for column in columns)
+    updatable = [column for column in columns if column not in key_columns]
+    assignments = ", ".join(f"{column} = EXCLUDED.{column}" for column in updatable)
+
+    sql = f"""
+        INSERT INTO {resource} ({", ".join(columns)}, updated_at)
+        VALUES ({placeholders}, now())
+        ON CONFLICT ({", ".join(key_columns)}) DO UPDATE SET
+            {assignments},
+            updated_at = now();
+    """
+
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_batch(cur, sql, rows)
+    return len(rows)
+
+
+def get_watermark(conn, resource: str) -> str | None:
+    """Highest source updated_at already ingested for this resource."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT watermark FROM ingestion_watermarks WHERE resource = %s",
+            (resource,),
+        )
+        row = cur.fetchone()
+
+    if not row or row[0] is None:
+        return None
+    return row[0].isoformat()
+
+
+def set_watermark(conn, resource: str, watermark: str, rows_ingested: int) -> None:
+    """Advance the mark so the next run resumes from exactly here."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO ingestion_watermarks (resource, watermark, rows_ingested, updated_at)
+            VALUES (%s, %s, %s, now())
+            ON CONFLICT (resource) DO UPDATE SET
+                watermark = EXCLUDED.watermark,
+                rows_ingested = ingestion_watermarks.rows_ingested + EXCLUDED.rows_ingested,
+                updated_at = now();
+            """,
+            (resource, watermark, rows_ingested),
+        )
