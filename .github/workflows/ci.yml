@@ -26,7 +26,7 @@ jobs:
         image: clickhouse/clickhouse-server:24.8
         env:
           CLICKHOUSE_DB: worldbank
-          CLICKHOUSE_PASSWORD: ""
+          CLICKHOUSE_PASSWORD: ci_password
         ports:
           - 8123:8123
           - 9000:9000
@@ -46,8 +46,8 @@ jobs:
 
       - name: Seed warehouse schema for CI
         run: |
-          ./clickhouse client --host 127.0.0.1 --multiquery < apps/warehouse/init/02_raw_tables.sql
-          ./clickhouse client --host 127.0.0.1 --multiquery < apps/warehouse/init/ci_seed_data.sql
+          ./clickhouse client --host 127.0.0.1 --password ci_password --multiquery < apps/warehouse/init/02_raw_tables.sql
+          ./clickhouse client --host 127.0.0.1 --password ci_password --multiquery < apps/warehouse/init/ci_seed_data.sql
 
       - name: Install dbt
         run: pip install -r apps/transformation/requirements.txt
@@ -59,6 +59,6 @@ jobs:
           CLICKHOUSE_HTTP_PORT: "8123"
           CLICKHOUSE_DB: worldbank
           CLICKHOUSE_USER: default
-          CLICKHOUSE_PASSWORD: ""
+          CLICKHOUSE_PASSWORD: ci_password
           DBT_PROFILES_DIR: .
         run: dbt build
