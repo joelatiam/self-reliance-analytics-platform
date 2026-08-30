@@ -8,7 +8,7 @@ See [`docs/design_report.md`](docs/design_report.md) for architecture, data mode
 
 ```
 apps/
-  ingestion/       World Bank API client -> Postgres
+  ingestion/       World Bank + UNHCR API clients -> Postgres
   cdc/              Debezium connector config + registration
   warehouse/        ClickHouse Kafka sources, raw tables, materialized views
   transformation/   dbt project (staging -> marts)
@@ -17,6 +17,15 @@ apps/
 docs/               Design report
 docker-compose.yml  Single-command stack
 ```
+
+Each app has its own README with details specific to it:
+
+- [apps/ingestion](apps/ingestion/README.md)
+- [apps/cdc](apps/cdc/README.md)
+- [apps/warehouse](apps/warehouse/README.md)
+- [apps/transformation](apps/transformation/README.md)
+- [apps/orchestration](apps/orchestration/README.md)
+- [apps/observability](apps/observability/README.md)
 
 ## Dependencies
 
