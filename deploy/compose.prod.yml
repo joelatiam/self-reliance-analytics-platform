@@ -8,7 +8,11 @@
 #    JVMs and ClickHouse will each happily take a gigabyte and OOM-kill each
 #    other on a box this size. Every service gets an explicit cap.
 #
-# 2. Loopback-only port bindings. `!override` replaces the port list rather than
+# 2. Restart policies. The base compose has none, so any reboot — a droplet
+#    resize, an unattended-upgrades kernel patch — leaves the stack down until
+#    someone notices. The one-shot init containers are deliberately excluded.
+#
+# 3. Loopback-only port bindings. `!override` replaces the port list rather than
 #    appending to it (plain merge would leave the 0.0.0.0 binding in place).
 #    Nothing is reachable from the internet except through nginx. This matters
 #    more than it looks: Docker writes its own iptables rules and bypasses ufw,
@@ -17,6 +21,7 @@
 
 services:
   postgres:
+    restart: unless-stopped
     mem_limit: 320m
     command: >
       -c wal_level=logical
@@ -28,6 +33,7 @@ services:
       - "127.0.0.1:5433:5432"
 
   kafka:
+    restart: unless-stopped
     mem_limit: 704m
     environment:
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
@@ -35,6 +41,7 @@ services:
       - "127.0.0.1:29092:29092"
 
   kafka-connect:
+    restart: unless-stopped
     mem_limit: 640m
     environment:
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
@@ -42,6 +49,7 @@ services:
       - "127.0.0.1:8083:8083"
 
   clickhouse:
+    restart: unless-stopped
     mem_limit: 640m
     volumes:
       - ./deploy/clickhouse-memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
@@ -56,6 +64,7 @@ services:
   # up, exiting 2 with no output at all. Point both at writable scratch space;
   # build artefacts have no business in a checkout that deploy.sh hard-resets.
   airflow-webserver:
+    restart: unless-stopped
     mem_limit: 896m
     environment:
       DBT_LOG_PATH: /tmp/dbt/logs
@@ -68,12 +77,14 @@ services:
       - "127.0.0.1:8080:8080"
 
   airflow-scheduler:
+    restart: unless-stopped
     mem_limit: 960m
     environment:
       DBT_LOG_PATH: /tmp/dbt/logs
       DBT_TARGET_PATH: /tmp/dbt/target
 
   clients-api-db:
+    restart: unless-stopped
     mem_limit: 256m
     command: >
       -c shared_buffers=64MB
@@ -82,6 +93,7 @@ services:
       - "127.0.0.1:5434:5432"
 
   clients-api:
+    restart: unless-stopped
     mem_limit: 320m
     environment:
       NODE_OPTIONS: "--max-old-space-size=224"
@@ -89,11 +101,13 @@ services:
       - "127.0.0.1:4000:4000"
 
   metrics-exporter:
+    restart: unless-stopped
     mem_limit: 128m
     ports: !override
       - "127.0.0.1:9105:9105"
 
   prometheus:
+    restart: unless-stopped
     mem_limit: 192m
     # Default args must be restated — `command` replaces, it does not extend.
     # 7d retention and a small block size keep the TSDB inside the cap.
@@ -108,6 +122,7 @@ services:
       - "127.0.0.1:9090:9090"
 
   grafana:
+    restart: unless-stopped
     mem_limit: 192m
     environment:
       GF_SERVER_ROOT_URL: "https://grafana.${APP_DOMAIN:-example.com}"
