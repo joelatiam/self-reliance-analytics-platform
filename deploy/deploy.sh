@@ -7,7 +7,7 @@
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/var/www/production/self-reliance-analytics-platform}
-BRANCH=${BRANCH:-main}
+BRANCH=${BRANCH:-production}
 COMPOSE=(docker compose -f docker-compose.yml -f deploy/compose.prod.yml)
 
 exec 9>/tmp/deploy-self-reliance.lock

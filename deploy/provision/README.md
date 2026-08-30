@@ -7,12 +7,14 @@ image. Run in order as root. Re-running any of them is safe.
 |--------|------|
 | `10-base.sh` | packages, 4 GB swap, ufw (22/80/443), fail2ban, unattended security upgrades |
 | `20-users.sh` | `app-admins` / `app-viewers` groups, `<admin>` / `deploy` / `reviewer` accounts, `/var/www/production` ownership and ACLs, sudoers |
+| `25-reviewer-password.sh` | password login for `reviewer` only, via an sshd Match block |
 | `30-runtime.sh` | docker + compose, node 20, pm2 (systemd unit owned by `deploy`), nginx, certbot |
 | `40-nginx.sh` | shared proxy snippet, catch-all default server, `app-site` vhost helper |
 | `50-helpers.sh` | `app-status` and `app-logs` — the read-only commands `reviewer` may sudo |
 | `60-admin-sudo.sh` | passwordless sudo for `<admin>` (key-only account, no password exists) |
 | `70-deploy-keys.sh` | CI→server and server→GitHub keypairs |
 | `80-deploy-docker.sh` | puts `deploy` in the docker group (see the note in the file) |
+| `85-boot-service.sh` | systemd unit that brings the stack up at boot |
 | `90-docker-firewall.sh` | DOCKER-USER rules, because Docker bypasses ufw |
 
 Two steps are deliberately not scripted, because both involve moving a private

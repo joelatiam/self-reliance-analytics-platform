@@ -5,13 +5,19 @@ behind nginx, deployed automatically when `main` goes green.
 
 ## How a deploy happens
 
-1. A PR merges to `main`.
+1. A PR merges to `production`. (`main` stays the integration branch —
+   promoting to `production` is the deliberate act that ships.)
 2. `CI` runs (ingestion tests, clients-api build, dbt build).
 3. On success, `Deploy` SSHes to the droplet as `deploy` and runs
-   [`deploy/deploy.sh`](deploy.sh): fetch, hard reset to `origin/main`,
+   [`deploy/deploy.sh`](deploy.sh): fetch, hard reset to `origin/production`,
    `docker compose build`, `up -d --wait`, prune.
 
 Deploy never runs on a red build. `workflow_dispatch` triggers a manual redeploy.
+
+The stack also starts itself at boot via the `self-reliance-platform` systemd
+unit, which runs the same compose command. That is deliberately belt-and-braces
+alongside `restart: unless-stopped`: the restart policy revives containers
+docker still knows about, the unit recreates any that are missing.
 
 ## Server layout
 

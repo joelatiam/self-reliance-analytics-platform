@@ -1,13 +1,14 @@
 name: Deploy
 
-# Deploys only after CI is green on main, so a merge that breaks the build
-# never reaches the droplet. `workflow_dispatch` is there for manual redeploys
-# (e.g. after changing .env on the server).
+# Deploys only after CI is green on `production`, so a merge that breaks the
+# build never reaches the droplet. `main` is the integration branch; promoting
+# to `production` is the deliberate act that ships. `workflow_dispatch` is there
+# for manual redeploys (e.g. after changing .env on the server).
 on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-    branches: [main]
+    branches: [production]
   workflow_dispatch:
 
 concurrency:
