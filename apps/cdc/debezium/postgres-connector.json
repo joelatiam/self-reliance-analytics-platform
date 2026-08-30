@@ -1,0 +1,23 @@
+{
+  "name": "wb-postgres-source",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "wb_app",
+    "database.password": "wb_app_pw",
+    "database.dbname": "worldbank",
+    "topic.prefix": "wb",
+    "table.include.list": "public.countries,public.indicators,public.observations",
+    "plugin.name": "pgoutput",
+    "slot.name": "wb_debezium_slot",
+    "publication.autocreate.mode": "filtered",
+    "snapshot.mode": "initial",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false",
+    "tombstones.on.delete": "false",
+    "heartbeat.interval.ms": "10000"
+  }
+}
