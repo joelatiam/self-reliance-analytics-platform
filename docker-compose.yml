@@ -1,8 +1,4 @@
-name: self-reliance-analytics-platform
-
-# The simulated source system lives in its own file.
-include:
-  - compose.clients-api.yml
+name: worldbank-indicators-pipeline
 
 x-airflow-common: &airflow-common
   build:
@@ -180,6 +176,56 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  # Simulated program source system: generates client, business and loan
+  # activity on the 5th, 15th, 25th, ... minute. The pipeline pulls it on the
+  # ten-minute boundary, so every fetch reads data that settled five minutes ago.
+  clients-api-db:
+    image: postgres:16
+    container_name: sr-clients-api-db
+    environment:
+      POSTGRES_DB: ${CLIENTS_API_DB_NAME:-self_reliance_ops}
+      POSTGRES_USER: ${CLIENTS_API_DB_USER:-sr_app}
+      POSTGRES_PASSWORD: ${CLIENTS_API_DB_PASSWORD:-sr_app_pw}
+    ports:
+      - "5434:5432"
+    volumes:
+      - clients-api-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CLIENTS_API_DB_USER:-sr_app} -d ${CLIENTS_API_DB_NAME:-self_reliance_ops}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  clients-api:
+    build:
+      context: ./apps/clients-api
+    container_name: sr-clients-api
+    environment:
+      NODE_ENV: production
+      APP_PORT: "4000"
+      API_PREFIX: api
+      API_KEY: ${CLIENTS_API_KEY:-}
+      DATABASE_HOST: clients-api-db
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${CLIENTS_API_DB_NAME:-self_reliance_ops}
+      DATABASE_USERNAME: ${CLIENTS_API_DB_USER:-sr_app}
+      DATABASE_PASSWORD: ${CLIENTS_API_DB_PASSWORD:-sr_app_pw}
+      SIMULATION_MODE: ${SIMULATION_MODE:-live}
+      SIMULATION_COUNTRIES: ${SIMULATION_COUNTRIES:-RWA,KEN,ETH,SSD,TCD}
+      SIMULATION_SEED_ON_BOOT: ${SIMULATION_SEED_ON_BOOT:-true}
+      SIMULATION_SEED_CLIENTS: ${SIMULATION_SEED_CLIENTS:-250}
+      SIMULATION_CRON_ENABLED: ${SIMULATION_CRON_ENABLED:-true}
+    ports:
+      - "4000:4000"
+    depends_on:
+      clients-api-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
   metrics-exporter:
     build:
       context: ./apps/observability/metrics_exporter
@@ -227,6 +273,7 @@ services:
 
 volumes:
   pg-data:
+  clients-api-db-data:
   ch-data:
   prom-data:
   grafana-data:
