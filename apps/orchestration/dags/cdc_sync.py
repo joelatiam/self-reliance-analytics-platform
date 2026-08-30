@@ -12,9 +12,14 @@ import time
 
 import psycopg2
 import requests
+from warehouse_schema import ensure_warehouse_schema
 
 CDC_SYNC_MAX_ATTEMPTS = 10
 CDC_SYNC_POLL_SECONDS = 6
+
+# Must match the database the warehouse init SQL creates
+# (apps/warehouse/init/01_kafka_sources.sql) and dbt writes into.
+CLICKHOUSE_DB = os.environ.get("CLICKHOUSE_DB", "self_reliance")
 
 
 def postgres_row_count(table: str) -> int:
@@ -37,7 +42,7 @@ def clickhouse_row_count(table: str) -> int:
     url = f"http://{os.environ['CLICKHOUSE_HOST']}:{os.environ['CLICKHOUSE_HTTP_PORT']}/"
     response = requests.get(
         url,
-        params={"query": f"SELECT count() FROM worldbank.raw_{table} FINAL"},
+        params={"query": f"SELECT count() FROM {CLICKHOUSE_DB}.raw_{table} FINAL"},
         auth=(os.environ["CLICKHOUSE_USER"], os.environ["CLICKHOUSE_PASSWORD"]),
         timeout=10,
     )
@@ -51,11 +56,16 @@ def wait_for_cdc_sync(
     poll_seconds: int = CDC_SYNC_POLL_SECONDS,
 ) -> None:
     """Poll until ClickHouse has caught up with Postgres, or proceed anyway."""
+    # The tables counted below may post-date the ClickHouse volume; creating
+    # them here is what keeps a 404 from failing the run.
+    ensure_warehouse_schema()
+
     targets = {table: postgres_row_count(table) for table in tables}
     for attempt in range(1, max_attempts + 1):
         current = {table: clickhouse_row_count(table) for table in tables}
         print(f"[cdc-sync] attempt {attempt}: clickhouse={current} postgres={targets}")
         if all(current[table] >= targets[table] for table in tables):
             return
-        time.sleep(poll_seconds)
+        if attempt < max_attempts:
+            time.sleep(poll_seconds)
     print("[cdc-sync] gave up waiting for full sync, proceeding with dbt build anyway")

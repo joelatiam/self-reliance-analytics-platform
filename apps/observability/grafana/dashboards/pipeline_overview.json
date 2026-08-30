@@ -1,27 +1,121 @@
 {
-  "uid": "wb-pipeline-overview",
-  "title": "World Bank Pipeline Overview",
+  "uid": "self-reliance-pipeline-overview",
+  "title": "Pipeline Overview",
   "schemaVersion": 39,
-  "version": 1,
-  "time": { "from": "now-1h", "to": "now" },
+  "version": 3,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "refresh": "10s",
   "panels": [
+    {
+      "id": 8,
+      "title": "Apps Up",
+      "description": "Every app in the stack, probed each scrape by the custom exporter. The BI layer is opt-in, so it appears only once started (`docker compose --profile bi up -d metabase`) rather than sitting permanently red.",
+      "type": "stat",
+      "gridPos": {
+        "h": 8,
+        "w": 16,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_app_up",
+          "legendFormat": "{{app}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "noValue": "N/A"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "Health Check Response Time",
+      "description": "How long each app takes to answer. A climbing line is the warning before a red tile.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_app_response_seconds",
+          "legendFormat": "{{app}}",
+          "refId": "A"
+        }
+      ]
+    },
     {
       "id": 1,
       "title": "CDC Lag (rows)",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
-      "targets": [{ "expr": "wb_pipeline_cdc_lag_rows", "refId": "A" }],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_cdc_lag_rows",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 100 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
             ]
-          }
+          },
+          "noValue": "N/A"
         }
       }
     },
@@ -29,19 +123,39 @@
       "id": 2,
       "title": "CDC Lag (seconds since last event)",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
-      "targets": [{ "expr": "wb_pipeline_cdc_lag_seconds", "refId": "A" }],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_cdc_lag_seconds",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 60 },
-              { "color": "red", "value": 300 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 60
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
             ]
-          }
+          },
+          "noValue": "N/A"
         }
       }
     },
@@ -49,13 +163,36 @@
       "id": 3,
       "title": "Pipeline Scrape Success",
       "type": "stat",
-      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
-      "targets": [{ "expr": "wb_pipeline_scrape_success", "refId": "A" }],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_scrape_success",
+          "refId": "A"
+        }
+      ],
       "fieldConfig": {
         "defaults": {
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "OK", "color": "green" } } }
-          ]
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "OK",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "noValue": "N/A"
         }
       }
     },
@@ -63,10 +200,89 @@
       "id": 4,
       "title": "Row Counts: Postgres vs ClickHouse",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 18, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 0,
+        "y": 14
+      },
       "targets": [
-        { "expr": "wb_pipeline_postgres_observations_total", "legendFormat": "postgres", "refId": "A" },
-        { "expr": "wb_pipeline_clickhouse_observations_total", "legendFormat": "clickhouse", "refId": "B" }
+        {
+          "expr": "sr_pipeline_postgres_observations_total",
+          "legendFormat": "postgres",
+          "refId": "A"
+        },
+        {
+          "expr": "sr_pipeline_clickhouse_observations_total",
+          "legendFormat": "clickhouse",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "CDC Lag by Table (rows behind Postgres)",
+      "description": "Per-table backlog. The headline CDC lag stat only watches observations, so a single stalled topic is only visible here.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_cdc_lag_rows_by_table",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Ingestion Watermark Age (seconds)",
+      "description": "Seconds since each clients API resource last advanced its watermark. Climbing past ~600s means the ten-minute pull has stopped making progress.",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_ingestion_watermark_age_seconds",
+          "legendFormat": "{{resource}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Replicated Rows: Postgres vs ClickHouse (all tables)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "expr": "sr_pipeline_postgres_rows_total",
+          "legendFormat": "postgres {{table}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sr_pipeline_clickhouse_rows_total",
+          "legendFormat": "clickhouse {{table}}",
+          "refId": "B"
+        }
       ]
     }
   ]
