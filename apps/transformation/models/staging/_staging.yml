@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: stg_countries
+    columns:
+      - name: iso2_code
+        tests: [not_null, unique]
+      - name: name
+        tests: [not_null]
+
+  - name: stg_indicators
+    columns:
+      - name: code
+        tests: [not_null, unique]
+      - name: name
+        tests: [not_null]
+
+  - name: stg_observations
+    columns:
+      - name: country_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_countries')
+                field: iso2_code
+      - name: indicator_code
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_indicators')
+                field: code
+      - name: year
+        tests: [not_null]
+      - name: value
+        tests: [not_null]

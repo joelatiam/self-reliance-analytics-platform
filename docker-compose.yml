@@ -2,7 +2,8 @@ name: worldbank-indicators-pipeline
 
 x-airflow-common: &airflow-common
   build:
-    context: ./apps/orchestration
+    context: .
+    dockerfile: apps/orchestration/Dockerfile
   environment:
     AIRFLOW__CORE__EXECUTOR: SequentialExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
@@ -46,9 +47,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-wb_app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wb_app_pw}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
+      - ./apps/ingestion/sql:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wb_app} -d ${POSTGRES_DB:-worldbank}"]
       interval: 5s
@@ -126,6 +128,7 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+      - "9363:9363"
     volumes:
       - ch-data:/var/lib/clickhouse
       - ./apps/warehouse/init:/docker-entrypoint-initdb.d
