@@ -1,6 +1,6 @@
 -- UNHCR displacement data: people hosted (by country of asylum), one row
 -- per host country per year. Complements the World Bank economic
--- indicators with the population Inkomoko actually serves.
+-- indicators with the displacement-affected population the program serves.
 
 CREATE TABLE IF NOT EXISTS refugee_statistics (
     id                  BIGSERIAL PRIMARY KEY,
