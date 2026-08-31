@@ -40,6 +40,19 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
+# Metabase mounts its ClickHouse driver from outside the checkout, because a jar
+# inside it is at the mercy of the hard reset above. Checked here because the
+# failure is otherwise silent and looks like a healthy deploy: Metabase starts
+# happily with no driver, /api/health returns 200, the wait below passes, and
+# every question against the warehouse breaks with no obvious reason why.
+METABASE_PLUGINS=/var/www/production/metabase-plugins
+if ! compgen -G "$METABASE_PLUGINS/*.jar" >/dev/null; then
+  echo "!! no driver jar in $METABASE_PLUGINS" >&2
+  echo "   Metabase would start without ClickHouse and report itself healthy." >&2
+  echo "   Fix: sudo deploy/provision/86-metabase-driver.sh" >&2
+  exit 1
+fi
+
 # --- one-time migration to the self-reliance names ---------------------------
 # The databases and the Postgres role were renamed (worldbank -> self_reliance,
 # wb_app -> sr_app). Two things follow that a plain redeploy cannot handle:
