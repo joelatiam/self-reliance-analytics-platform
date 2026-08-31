@@ -26,6 +26,7 @@ touches Metabase. Bringing it up is a deliberate, documented opt-in.
 ```
 fetch-driver.sh       One-time download of the ClickHouse community driver
 setup-collections.sh  Creates the collection tree over the API (idempotent)
+cleanup-sample-content.sh  Clears the Examples collection and Sample Database
 plugins/              Where that driver jar lands (mounted into the container)
 ```
 
@@ -207,13 +208,19 @@ Metabase seeds an "Examples" collection and a Sample Database on first boot.
 fresh instance clean.
 
 It does **not** retroactively clean an instance that already created them — the
-flag is only read when the application database is initialised. Remove them once,
-by hand:
+flag is only read when the application database is initialised. Clear an existing
+instance once with:
 
-- **Examples collection** — open it, then Move to trash. Trash → empty it to
-  finish the job.
-- **Sample Database** — Admin → Databases → Sample Database → Remove. This also
-  drops the questions that pointed at it.
+```bash
+./apps/bi/cleanup-sample-content.sh
+```
+
+It trashes the Examples collection and removes the Sample Database, prompting
+before each (pass `--yes` to skip the prompts). Removing the Sample Database also
+drops any question built on it, which is why it asks.
+
+By hand, if you would rather: open the Examples collection → Move to trash, then
+Admin → Databases → Sample Database → Remove.
 
 ## Troubleshooting
 
