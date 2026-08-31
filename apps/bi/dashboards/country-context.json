@@ -1,0 +1,54 @@
+{
+  "collection": "Country Context",
+  "dashboard": {
+    "name": "Country Context",
+    "description": "The macro backdrop the programme operates against: World Bank indicators and UNHCR displacement figures."
+  },
+  "cards": [
+    {
+      "name": "GDP growth by country",
+      "description": "Annual GDP growth, the indicator the programme's own results should be read against.",
+      "display": "line",
+      "size_x": 12, "size_y": 7, "row": 0, "col": 0,
+      "sql": "select year, country_name, value as gdp_growth_pct\nfrom mart_country_indicators\nwhere indicator_code = 'NY.GDP.MKTP.KD.ZG'\norder by year",
+      "visualization_settings": {
+        "graph.dimensions": ["year", "country_name"],
+        "graph.metrics": ["gdp_growth_pct"],
+        "graph.y_axis.title_text": "% growth"
+      }
+    },
+    {
+      "name": "Displaced population hosted",
+      "description": "Refugees, asylum seekers, IDPs and others of concern, per UNHCR.",
+      "display": "line",
+      "size_x": 12, "size_y": 7, "row": 0, "col": 12,
+      "sql": "select year, country_name, total_displaced_hosted\nfrom mart_country_refugee_stats\norder by year",
+      "visualization_settings": {
+        "graph.dimensions": ["year", "country_name"],
+        "graph.metrics": ["total_displaced_hosted"],
+        "graph.y_axis.title_text": "People"
+      }
+    },
+    {
+      "name": "Displaced population hosted, latest year",
+      "description": "Mapped on ISO-2 codes so the built-in world map matches.",
+      "display": "map",
+      "size_x": 12, "size_y": 8, "row": 7, "col": 0,
+      "sql": "select c.iso2_code as country, r.total_displaced_hosted as displaced\nfrom mart_country_refugee_stats r\ninner join stg_countries c on r.country_iso3 = c.iso3_code\nwhere r.year = (select max(year) from mart_country_refugee_stats)\norder by displaced desc",
+      "visualization_settings": {
+        "map.type": "region",
+        "map.region": "world_countries",
+        "map.dimension": "country",
+        "map.metric": "displaced"
+      }
+    },
+    {
+      "name": "Biggest year-on-year indicator moves",
+      "description": "Where the macro picture shifted most, in either direction.",
+      "display": "table",
+      "size_x": 12, "size_y": 8, "row": 7, "col": 12,
+      "sql": "select country_name, indicator_name, year, round(value, 2) as value,\n       round(prior_year_value, 2) as prior_year_value, round(yoy_change, 2) as yoy_change\nfrom mart_indicator_yoy_growth\nwhere prior_year_value is not null\norder by abs(yoy_change) desc\nlimit 25",
+      "visualization_settings": {}
+    }
+  ]
+}
