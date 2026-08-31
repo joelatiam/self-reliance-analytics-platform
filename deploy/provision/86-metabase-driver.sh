@@ -16,6 +16,13 @@ URL="https://github.com/ClickHouse/metabase-clickhouse-driver/releases/download/
 
 install -d -o root -g root -m 755 "$DIR"
 
+# This directory sits under /var/www/production and inherits its default ACLs.
+# Metabase asserts writability through Java NIO, which trips over the inherited
+# mask and refuses the directory ("does not have permissions to write") even
+# though a plain write succeeds. Strip the ACLs here and keep plain bits.
+setfacl -b "$DIR" 2>/dev/null || true
+chmod 0777 "$DIR"
+
 if [ -s "$JAR" ]; then
   echo "==> driver already present ($(stat -c%s "$JAR") bytes)"
 else

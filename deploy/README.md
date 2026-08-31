@@ -144,6 +144,28 @@ sudo app-site api 4000                       # vhost per app
 sudo certbot --nginx -d api.example.com    # TLS
 ```
 
+## Metabase
+
+Optional, in [`compose.bi.yml`](compose.bi.yml), and needs 8 GB or larger — it
+wants a couple of gigabytes to itself. Two things bit during setup and are worth
+knowing before touching it:
+
+- Metabase ships **no ClickHouse driver**. `provision/86-metabase-driver.sh`
+  fetches the one ClickHouse maintain, and validates it is really a jar — a
+  GitHub error page saved to that path leaves Metabase starting happily with no
+  driver at all.
+- The plugins directory must be **writable, with no inherited ACLs**. Metabase
+  asserts writability through Java NIO, which trips over the default ACL mask
+  inherited from `/var/www/production` even when writes plainly succeed. The
+  only symptom is `clickhouse is not a valid database engine` much later on.
+
+```bash
+sudo deploy/provision/86-metabase-driver.sh
+docker compose -f docker-compose.yml -f deploy/compose.prod.yml \
+               -f deploy/compose.bi.yml up -d metabase
+sudo deploy/provision/87-bi-upstream.sh 3001   # repoint the vhost
+```
+
 ## Security note
 
 Anyone who can merge to `main` can execute code on this droplet as `deploy`,
