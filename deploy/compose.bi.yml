@@ -1,54 +1,72 @@
-# Metabase for bi.joelatiam.com. Kept in a separate file, not merged into the
-# production override, because it is optional and memory-hungry:
+# Production override for Metabase (bi.joelatiam.com).
 #
-#   docker compose -f docker-compose.yml -f deploy/compose.prod.yml \
-#                  -f deploy/compose.bi.yml up -d metabase
+# The service itself is defined in docker-compose.yml behind the `bi` profile,
+# so a local `docker compose up` never starts it. This file is the droplet's
+# override of that definition, layered like compose.prod.yml:
+#
+#   docker compose --profile bi -f docker-compose.yml \
+#                  -f deploy/compose.prod.yml -f deploy/compose.bi.yml up -d
+#
+# `--profile bi` is not optional and deploy.sh passes it. Without it Compose
+# excludes the service from the project, and `up -d --remove-orphans` then reads
+# a running sr-metabase as an orphan and removes it — which is how a BI instance
+# brought up by hand survived only until the next deploy or reboot.
 #
 # REQUIRES 8 GB or larger. On the 4 GB droplet the rest of the stack already sat
-# at ~2.7 GB with swap in use, and Metabase needs a couple of gigabytes to itself
-# — it would not start in what was left.
+# at ~2.7 GB with swap in use, and Metabase needs a couple of gigabytes to
+# itself — it would not start in what was left.
 #
 # Uses the bundled H2 application database rather than its own Postgres. That is
 # the wrong choice for real production — H2 is a single file with no concurrent
-# access story — but right for a demo: one fewer container, one fewer password,
-# and nothing here is the system of record.
+# access story, and it serializes the writes every question run makes — but right
+# for a demo: one fewer container, one fewer password, and nothing here is the
+# system of record.
 
 services:
   metabase:
-    image: metabase/metabase:v0.50.21
-    container_name: sr-metabase
     restart: unless-stopped
+    # The base caps this at 1500m so it cannot starve ClickHouse on a small
+    # Docker VM. The droplet has room for a real heap.
     mem_limit: 3g
     environment:
-      MB_DB_TYPE: h2
-      MB_DB_FILE: /metabase-data/metabase.db
-      MB_JETTY_HOST: 0.0.0.0
-      MB_JETTY_PORT: "3001"
       # Metabase is Clojure, and Clojure is hungry for metaspace specifically.
       # A first attempt at -Xmx900m -XX:MaxMetaspaceSize=200m died on startup
       # with a JVM OutOfMemoryError (not a cgroup kill), so metaspace is left
       # unbounded and the heap given room.
       JAVA_OPTS: "-Xmx2g"
+      MB_JETTY_HOST: 0.0.0.0
       MB_SITE_URL: "https://bi.${APP_DOMAIN:-joelatiam.com}"
-      # Metabase seeds an "Examples" collection and a Sample Database on first
-      # boot. Off here: this instance has one purpose, and demo content next to
-      # the real marts makes the collection tree harder to read, not easier.
-      # Only affects a fresh application database — an instance that already
-      # created them needs them removed once (see apps/bi/README.md).
-      MB_LOAD_SAMPLE_CONTENT: "false"
-    volumes:
+      # Caching is off by default, so every dashboard card re-executed against
+      # ClickHouse on every view — against marts that only change when a DAG
+      # runs. MIN_TTL is the floor on average execution time before a question
+      # is cached at all and defaults to 60s, which here means "never"; 0 caches
+      # everything. TTL_RATIO multiplies a question's own average runtime to get
+      # its cache lifetime, so slow questions are held longer than fast ones.
+      # Per-question and per-dashboard overrides live in Admin -> Performance;
+      # these are the instance-wide default that page starts from.
+      MB_ENABLE_QUERY_CACHING: "true"
+      MB_QUERY_CACHING_MIN_TTL: "0"
+      MB_QUERY_CACHING_TTL_RATIO: "100"
+      # Anonymous usage tracking posts to sp.metabase.com on page load, and that
+      # request took 1.9s of a 3.3s first paint measured from outside the
+      # datacentre.
+      MB_ANON_TRACKING_ENABLED: "false"
+    # `!override` on both lists below, because a plain merge appends. Inherited,
+    # that meant two mounts at /plugins and a second published binding fighting
+    # the first for port 3001.
+    volumes: !override
       - metabase-data:/metabase-data
-      # Metabase ships no ClickHouse driver; the jar is fetched into this
-      # directory by deploy/provision/86-metabase-driver.sh and loaded at boot.
+      # The base mounts ./apps/bi/plugins, which deploy.sh hard-resets. On the
+      # droplet the jar lives outside the checkout, fetched by
+      # deploy/provision/86-metabase-driver.sh.
       - /var/www/production/metabase-plugins:/plugins:ro
-    ports:
-      - "127.0.0.1:3001:3001"
+    # Jetty stays on the base's port 3000 inside the container; only the host
+    # binding changes, to loopback so nothing is reachable except through nginx.
+    ports: !override
+      - "127.0.0.1:3001:3000"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:3001/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:3000/api/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 30
       start_period: 180s
-
-volumes:
-  metabase-data:

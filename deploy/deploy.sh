@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Server-side deploy. Run as the `deploy` user, either by GitHub Actions on a
-# merge to main, or by hand: /var/www/production/<app>/deploy/deploy.sh
+# merge to production, or by hand: /var/www/production/<app>/deploy/deploy.sh
 #
 # Idempotent and safe to re-run. Takes an flock so two merges landing close
 # together queue instead of fighting over the same checkout.
@@ -8,7 +8,17 @@ set -euo pipefail
 
 APP_DIR=${APP_DIR:-/var/www/production/self-reliance-analytics-platform}
 BRANCH=${BRANCH:-production}
-COMPOSE=(docker compose -f docker-compose.yml -f deploy/compose.prod.yml)
+# The BI profile and its override file are both required, not optional. Metabase
+# is defined in docker-compose.yml behind `profiles: ["bi"]`, and a Compose
+# invocation that does not select that profile leaves the service out of the
+# project entirely — at which point `up -d --remove-orphans` below reads a
+# running sr-metabase as an orphan and removes it. That is why a BI instance
+# brought up by hand survived only until the next deploy.
+COMPOSE=(docker compose
+  --profile bi
+  -f docker-compose.yml
+  -f deploy/compose.prod.yml
+  -f deploy/compose.bi.yml)
 
 exec 9>/tmp/deploy-self-reliance.lock
 flock -w 900 9 || { echo "another deploy is running; gave up after 15m"; exit 1; }
