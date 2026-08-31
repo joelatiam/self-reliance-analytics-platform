@@ -4,9 +4,9 @@
 #   docker compose -f docker-compose.yml -f deploy/compose.prod.yml \
 #                  -f deploy/compose.bi.yml up -d metabase
 #
-# REQUIRES more RAM than the 4 GB droplet has spare. At 4 GB the stack already
-# sits at ~2.7 GB with swap in use; Metabase is a JVM app wanting 700 MB-1 GB
-# on top. Bring this up only on 8 GB or larger.
+# REQUIRES 8 GB or larger. On the 4 GB droplet the rest of the stack already sat
+# at ~2.7 GB with swap in use, and Metabase needs a couple of gigabytes to itself
+# — it would not start in what was left.
 #
 # Uses the bundled H2 application database rather than its own Postgres. That is
 # the wrong choice for real production — H2 is a single file with no concurrent
@@ -18,15 +18,17 @@ services:
     image: metabase/metabase:v0.50.21
     container_name: sr-metabase
     restart: unless-stopped
-    mem_limit: 1400m
+    mem_limit: 3g
     environment:
       MB_DB_TYPE: h2
       MB_DB_FILE: /metabase-data/metabase.db
       MB_JETTY_HOST: 0.0.0.0
       MB_JETTY_PORT: "3001"
-      # Leave headroom under mem_limit for the JVM's non-heap footprint
-      # (metaspace, code cache, direct buffers), which is far from negligible.
-      JAVA_OPTS: "-Xmx900m -XX:MaxMetaspaceSize=200m"
+      # Metabase is Clojure, and Clojure is hungry for metaspace specifically.
+      # A first attempt at -Xmx900m -XX:MaxMetaspaceSize=200m died on startup
+      # with a JVM OutOfMemoryError (not a cgroup kill), so metaspace is left
+      # unbounded and the heap given room.
+      JAVA_OPTS: "-Xmx2g"
       MB_SITE_URL: "https://bi.${APP_DOMAIN:-joelatiam.com}"
     volumes:
       - metabase-data:/metabase-data
