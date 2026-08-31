@@ -1,11 +1,11 @@
 {{ config(
     engine='MergeTree()',
-    order_by=['indicator_code', 'country_code', 'year'],
-    partition_by='indicator_code'
+    order_by=['indicator_code', 'country_code', 'year']
 ) }}
 
 -- Year-over-year change per country/indicator, built on top of the
--- denormalized fact table rather than re-joining the staging layer.
+-- denormalized fact table rather than re-joining the staging layer. Sorting key
+-- only, for the reason in mart_country_indicators.
 select
     country_code,
     country_name,

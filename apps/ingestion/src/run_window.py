@@ -16,8 +16,12 @@ from datetime import datetime, timedelta, timezone
 
 # How far behind the current interval may fall before a run is treated as a
 # replay of the past. Two intervals of slack absorbs a slow run or a retry
-# without tripping.
-STALE_RUN_LAG_SECONDS = 20 * 60
+# without tripping, so this tracks the schedule of the DAG that uses it —
+# client_activity_pipeline, now every twenty minutes. Left at 20 minutes when
+# that cadence changed, it would have been exactly one interval rather than two,
+# and a single retry would have skipped a legitimate run.
+CLIENT_ACTIVITY_INTERVAL_SECONDS = 20 * 60
+STALE_RUN_LAG_SECONDS = 2 * CLIENT_ACTIVITY_INTERVAL_SECONDS
 
 
 def is_stale_run(

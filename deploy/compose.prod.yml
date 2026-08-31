@@ -50,7 +50,7 @@ services:
 
   clickhouse:
     restart: unless-stopped
-    mem_limit: 1280m
+    mem_limit: 2048m
     volumes:
       - ./deploy/clickhouse-memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
     ports: !override
@@ -69,9 +69,9 @@ services:
     environment:
       DBT_LOG_PATH: /tmp/dbt/logs
       DBT_TARGET_PATH: /tmp/dbt/target
-      # Airflow spawns 4 gunicorn workers by default. On 2 vCPUs that buys no
-      # concurrency and costs ~350 MB — it was the single largest consumer on
-      # the box and sat pinned at its ceiling. Two is plenty for a demo UI.
+      # Airflow spawns 4 gunicorn workers by default, which cost ~350 MB and
+      # made the webserver the single largest consumer on the 4 GB box, pinned
+      # at its ceiling. Three is plenty for a demo UI on 4 vCPUs.
       AIRFLOW__WEBSERVER__WORKERS: "3"
     ports: !override
       - "127.0.0.1:8080:8080"

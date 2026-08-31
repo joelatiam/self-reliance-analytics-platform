@@ -13,6 +13,19 @@ echo "==> unavailable page"
 install -d -o root -g root -m 755 "$ERR_ROOT"
 install -m 644 "$(dirname "$0")/nginx/unavailable.html" "$ERR_ROOT/unavailable.html"
 
+# `Connection: upgrade` was previously set unconditionally, on every request and
+# not just WebSocket ones. That header tells nginx the connection is single-use,
+# so no proxied request could reuse a connection to the upstream — every API call
+# to Metabase, Airflow and Grafana paid a fresh TCP handshake. The map sends
+# `close` when the client did not ask for an upgrade, which is the ordinary case.
+echo "==> upgrade map (http context, so it must live in conf.d)"
+cat > /etc/nginx/conf.d/upgrade-map.conf <<'MAP'
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+MAP
+
 echo "==> shared proxy snippet"
 cat > /etc/nginx/snippets/app-proxy.conf <<'SNIP'
 proxy_http_version 1.1;
@@ -21,7 +34,7 @@ proxy_set_header X-Real-IP         $remote_addr;
 proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 proxy_set_header Upgrade           $http_upgrade;
-proxy_set_header Connection        "upgrade";
+proxy_set_header Connection        $connection_upgrade;
 proxy_read_timeout 300s;
 proxy_connect_timeout 15s;
 SNIP
