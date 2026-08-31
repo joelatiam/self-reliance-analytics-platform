@@ -1,0 +1,132 @@
+# Production override for the 4 GB droplet. Layered on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d
+#
+# Two jobs, both absent from the local dev setup:
+#
+# 1. Memory ceilings. The stack sizes itself against host RAM by default — two
+#    JVMs and ClickHouse will each happily take a gigabyte and OOM-kill each
+#    other on a box this size. Every service gets an explicit cap.
+#
+# 2. Restart policies. The base compose has none, so any reboot — a droplet
+#    resize, an unattended-upgrades kernel patch — leaves the stack down until
+#    someone notices. The one-shot init containers are deliberately excluded.
+#
+# 3. Loopback-only port bindings. `!override` replaces the port list rather than
+#    appending to it (plain merge would leave the 0.0.0.0 binding in place).
+#    Nothing is reachable from the internet except through nginx. This matters
+#    more than it looks: Docker writes its own iptables rules and bypasses ufw,
+#    so a 0.0.0.0 binding here would expose ClickHouse and Postgres publicly
+#    regardless of the firewall.
+
+services:
+  postgres:
+    restart: unless-stopped
+    mem_limit: 320m
+    command: >
+      -c wal_level=logical
+      -c max_replication_slots=4
+      -c max_wal_senders=4
+      -c shared_buffers=80MB
+      -c max_connections=50
+    ports: !override
+      - "127.0.0.1:5433:5432"
+
+  kafka:
+    restart: unless-stopped
+    mem_limit: 704m
+    environment:
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
+    ports: !override
+      - "127.0.0.1:29092:29092"
+
+  kafka-connect:
+    restart: unless-stopped
+    mem_limit: 1024m
+    environment:
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
+    ports: !override
+      - "127.0.0.1:8083:8083"
+
+  clickhouse:
+    restart: unless-stopped
+    mem_limit: 1280m
+    volumes:
+      - ./deploy/clickhouse-memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
+    ports: !override
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9363:9363"
+
+  # dbt writes logs/ and target/ into the project dir by default. In production
+  # that dir is a git checkout owned by `deploy` and mounted into a container
+  # running as uid 50000, so the write fails — and dbt dies before its logger is
+  # up, exiting 2 with no output at all. Point both at writable scratch space;
+  # build artefacts have no business in a checkout that deploy.sh hard-resets.
+  airflow-webserver:
+    restart: unless-stopped
+    mem_limit: 1536m
+    environment:
+      DBT_LOG_PATH: /tmp/dbt/logs
+      DBT_TARGET_PATH: /tmp/dbt/target
+      # Airflow spawns 4 gunicorn workers by default. On 2 vCPUs that buys no
+      # concurrency and costs ~350 MB — it was the single largest consumer on
+      # the box and sat pinned at its ceiling. Two is plenty for a demo UI.
+      AIRFLOW__WEBSERVER__WORKERS: "3"
+    ports: !override
+      - "127.0.0.1:8080:8080"
+
+  airflow-scheduler:
+    restart: unless-stopped
+    mem_limit: 960m
+    environment:
+      DBT_LOG_PATH: /tmp/dbt/logs
+      DBT_TARGET_PATH: /tmp/dbt/target
+
+  clients-api-db:
+    restart: unless-stopped
+    mem_limit: 256m
+    command: >
+      -c shared_buffers=64MB
+      -c max_connections=40
+    ports: !override
+      - "127.0.0.1:5434:5432"
+
+  clients-api:
+    restart: unless-stopped
+    mem_limit: 320m
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=224"
+    ports: !override
+      - "127.0.0.1:4000:4000"
+
+  metrics-exporter:
+    restart: unless-stopped
+    mem_limit: 128m
+    ports: !override
+      - "127.0.0.1:9105:9105"
+
+  prometheus:
+    restart: unless-stopped
+    mem_limit: 192m
+    # Default args must be restated — `command` replaces, it does not extend.
+    # 7d retention and a small block size keep the TSDB inside the cap.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=512MB
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    ports: !override
+      - "127.0.0.1:9090:9090"
+
+  grafana:
+    restart: unless-stopped
+    mem_limit: 192m
+    environment:
+      GF_SERVER_ROOT_URL: "https://grafana.${APP_DOMAIN:-example.com}"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports: !override
+      - "127.0.0.1:3000:3000"

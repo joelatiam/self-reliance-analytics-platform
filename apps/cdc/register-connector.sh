@@ -2,6 +2,7 @@
 set -e
 
 CONNECT_URL="${KAFKA_CONNECT_URL:-http://kafka-connect:8083}"
+CONFIG=/tmp/postgres-connector.json
 
 # The connector config is a template: Postgres credentials come from the same
 # environment the postgres service is started with, so changing them in .env
@@ -27,8 +28,25 @@ if curl -sf "$CONNECT_URL/connectors/sr-postgres-source" >/dev/null 2>&1; then
   exit 0
 fi
 
+# Rendered to a file rather than piped, so the POST below can read it back
+# without the credentials ever appearing on a command line.
+render_connector_config > "$CONFIG"
+
 echo "Registering Postgres CDC source connector..."
-curl -s -X POST -H "Content-Type: application/json" \
-  --data "$(render_connector_config)" \
-  "$CONNECT_URL/connectors"
-echo
+RESPONSE=$(curl -s -w '\n%{http_code}' -X POST -H "Content-Type: application/json" \
+  --data @"$CONFIG" "$CONNECT_URL/connectors")
+STATUS=$(echo "$RESPONSE" | tail -1)
+BODY=$(echo "$RESPONSE" | sed '$d')
+
+# Never echo the success body: Kafka Connect echoes the whole config back,
+# database.password included, and container logs are readable by anyone with
+# log access. Errors are safe to print — they describe the failure, not the
+# credentials.
+#
+# Exit non-zero on failure. Without this the container exits 0 and a deploy
+# reports success while CDC is dead — the failure mode this file just had.
+case "$STATUS" in
+  2*) echo "Connector registered (HTTP $STATUS)." ;;
+  *)  echo "Connector registration FAILED (HTTP $STATUS): $(echo "$BODY" | head -c 400)" >&2
+      exit 1 ;;
+esac
