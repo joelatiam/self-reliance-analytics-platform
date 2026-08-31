@@ -1,12 +1,22 @@
 """Orchestrates operational client activity: pull -> wait for CDC -> dbt build.
 
-Runs every ten minutes, on the boundary. The source system generates its
-activity five minutes into each window (:05, :15, :25, ...), so every run reads
-data that settled five minutes earlier and never races a half-written batch.
+Runs every twenty minutes, on the boundary. The source system generates its
+activity five minutes into each ten-minute window (:05, :15, :25, ...), so a run
+at :00, :20 or :40 always reads batches that settled at least five minutes
+earlier and never races a half-written one.
 
 The pull itself is incremental — each resource resumes from its own stored
-watermark — so a ten-minute cadence carries only what actually changed rather
-than re-reading the whole caseload.
+watermark — so the cadence sets how often the marts are rebuilt, not how much
+data a run carries: a twenty-minute run collects the same two windows a
+ten-minute one would have collected one at a time.
+
+Twenty rather than ten because the cadence is what the BI layer feels. Every mart
+here is materialized as a table, so each run is a full rebuild of six of them
+plus their tests, and while that runs it has ClickHouse largely to itself —
+dashboard queries landing in the window queue behind it. Halving the frequency
+halves that contention while keeping the feed comfortably fresh for a dashboard
+someone is reading. The durable fix is incremental marts, which is a larger
+change; see docs/design_report.md.
 
 That watermark is global rather than per-interval, and the source serves current
 state only, so this DAG cannot be backfilled: a past interval has no history to
@@ -72,7 +82,7 @@ def wait_for_client_activity_cdc_sync() -> None:
 with DAG(
     dag_id="client_activity_pipeline",
     description="Pull client activity from the clients API, sync via CDC, transform in dbt",
-    schedule_interval="*/10 * * * *",
+    schedule_interval="*/20 * * * *",
     start_date=days_ago(1),
     catchup=False,
     max_active_runs=1,
