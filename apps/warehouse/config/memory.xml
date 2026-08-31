@@ -3,16 +3,19 @@
      then OOM-kills whichever container asks next. Held to a ceiling that suits
      this dataset: thousands of rows, not billions.
 
-     Mirrors deploy/clickhouse-memory.xml, which the droplet already runs. -->
+     No longer mirrors deploy/clickhouse-memory.xml. The droplet is 8 GB / 4 vCPU
+     and its ceilings were raised to match; the local Docker VM still has 3.8 GB
+     for the whole stack, so these stay small on purpose. -->
 <clickhouse>
     <max_server_memory_usage>1073741824</max_server_memory_usage>
     <mark_cache_size>134217728</mark_cache_size>
-    <uncompressed_cache_size>0</uncompressed_cache_size>
+    <uncompressed_cache_size>67108864</uncompressed_cache_size>
     <max_concurrent_queries>20</max_concurrent_queries>
     <profiles>
         <default>
             <max_memory_usage>419430400</max_memory_usage>
             <max_threads>2</max_threads>
+            <use_uncompressed_cache>1</use_uncompressed_cache>
         </default>
     </profiles>
 </clickhouse>
