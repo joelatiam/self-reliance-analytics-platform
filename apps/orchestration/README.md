@@ -49,6 +49,6 @@ Runs with `SequentialExecutor` + SQLite — intentionally minimal for a self-con
 ## Access
 
 - UI: http://localhost:8080 (`admin` / `admin`, see `.env`)
-- Trigger manually: `docker exec wb-airflow-scheduler airflow dags trigger country_indicators_pipeline`
-- Trigger the client pipeline: `docker exec wb-airflow-scheduler airflow dags trigger client_activity_pipeline`
-- Check task states: `docker exec wb-airflow-scheduler airflow tasks states-for-dag-run country_indicators_pipeline <run_id>`
+- Trigger manually: `docker exec sr-airflow-scheduler airflow dags trigger country_indicators_pipeline`
+- Trigger the client pipeline: `docker exec sr-airflow-scheduler airflow dags trigger client_activity_pipeline`
+- Check task states: `docker exec sr-airflow-scheduler airflow tasks states-for-dag-run country_indicators_pipeline <run_id>`

@@ -4,23 +4,33 @@ set -e
 CONNECT_URL="${KAFKA_CONNECT_URL:-http://kafka-connect:8083}"
 CONFIG=/tmp/postgres-connector.json
 
+# The connector config is a template: Postgres credentials come from the same
+# environment the postgres service is started with, so changing them in .env
+# cannot leave CDC authenticating with stale hardcoded values. sed rather than
+# envsubst, which the curl base image does not ship.
+render_connector_config() {
+  sed \
+    -e "s|\${POSTGRES_HOST}|${POSTGRES_HOST:-postgres}|g" \
+    -e "s|\${POSTGRES_PORT}|${POSTGRES_PORT:-5432}|g" \
+    -e "s|\${POSTGRES_DB}|${POSTGRES_DB:-self_reliance}|g" \
+    -e "s|\${POSTGRES_USER}|${POSTGRES_USER:-sr_app}|g" \
+    -e "s|\${POSTGRES_PASSWORD}|${POSTGRES_PASSWORD:-sr_app_pw}|g" \
+    debezium/postgres-connector.json
+}
+
 echo "Waiting for Kafka Connect REST API at $CONNECT_URL..."
 until curl -sf "$CONNECT_URL/connectors" >/dev/null 2>&1; do
   sleep 3
 done
 
-if curl -sf "$CONNECT_URL/connectors/wb-postgres-source" >/dev/null 2>&1; then
-  echo "Connector wb-postgres-source already registered, skipping."
+if curl -sf "$CONNECT_URL/connectors/sr-postgres-source" >/dev/null 2>&1; then
+  echo "Connector sr-postgres-source already registered, skipping."
   exit 0
 fi
 
-# The checked-in JSON carries the local defaults so it stays runnable by hand.
-# Anywhere with real credentials (any deployed environment) passes them in as
-# env vars, so they are substituted here rather than baked into the image.
-sed -e "s|\"database.user\": \".*\"|\"database.user\": \"${POSTGRES_USER:-wb_app}\"|" \
-    -e "s|\"database.password\": \".*\"|\"database.password\": \"${POSTGRES_PASSWORD:-wb_app_pw}\"|" \
-    -e "s|\"database.dbname\": \".*\"|\"database.dbname\": \"${POSTGRES_DB:-worldbank}\"|" \
-    debezium/postgres-connector.json > "$CONFIG"
+# Rendered to a file rather than piped, so the POST below can read it back
+# without the credentials ever appearing on a command line.
+render_connector_config > "$CONFIG"
 
 echo "Registering Postgres CDC source connector..."
 RESPONSE=$(curl -s -w '\n%{http_code}' -X POST -H "Content-Type: application/json" \

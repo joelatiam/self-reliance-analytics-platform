@@ -27,5 +27,5 @@ Quick summary: `JSONAsString` + `JSONExtract` in a materialized view (rather tha
 ## Check it
 
 ```bash
-docker exec wb-clickhouse clickhouse-client -q "SELECT count() FROM worldbank.raw_observations FINAL"
+docker exec sr-clickhouse clickhouse-client -q "SELECT count() FROM self_reliance.raw_observations FINAL"
 ```

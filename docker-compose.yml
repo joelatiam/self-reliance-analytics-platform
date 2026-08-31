@@ -8,7 +8,7 @@ x-airflow-common: &airflow-common
   build:
     context: .
     dockerfile: apps/orchestration/Dockerfile
-  environment:
+  environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: SequentialExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -16,12 +16,12 @@ x-airflow-common: &airflow-common
     AIRFLOW_UID: "${AIRFLOW_UID:-50000}"
     POSTGRES_HOST: postgres
     POSTGRES_PORT: "5432"
-    POSTGRES_DB: ${POSTGRES_DB:-worldbank}
-    POSTGRES_USER: ${POSTGRES_USER:-wb_app}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wb_app_pw}
+    POSTGRES_DB: ${POSTGRES_DB:-self_reliance}
+    POSTGRES_USER: ${POSTGRES_USER:-sr_app}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sr_app_pw}
     CLICKHOUSE_HOST: clickhouse
     CLICKHOUSE_HTTP_PORT: "8123"
-    CLICKHOUSE_DB: ${CLICKHOUSE_DB:-worldbank}
+    CLICKHOUSE_DB: ${CLICKHOUSE_DB:-self_reliance}
     CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
     CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_pw}
     WORLD_BANK_BASE_URL: ${WORLD_BANK_BASE_URL:-https://api.worldbank.org/v2}
@@ -34,6 +34,7 @@ x-airflow-common: &airflow-common
     - ./apps/orchestration/dags:/opt/airflow/dags
     - ./apps/ingestion:/opt/airflow/ingestion
     - ./apps/transformation:/opt/airflow/dbt
+    - ./apps/warehouse/init:/opt/airflow/warehouse:ro
     - airflow-state:/opt/airflow
   depends_on:
     postgres:
@@ -44,29 +45,29 @@ x-airflow-common: &airflow-common
 services:
   postgres:
     image: postgres:16
-    container_name: wb-postgres
+    container_name: sr-postgres
     command: >
       -c wal_level=logical
       -c max_replication_slots=4
       -c max_wal_senders=4
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-worldbank}
-      POSTGRES_USER: ${POSTGRES_USER:-wb_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wb_app_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-self_reliance}
+      POSTGRES_USER: ${POSTGRES_USER:-sr_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sr_app_pw}
     ports:
       - "5433:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
       - ./apps/ingestion/sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wb_app} -d ${POSTGRES_DB:-worldbank}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sr_app} -d ${POSTGRES_DB:-self_reliance}"]
       interval: 5s
       timeout: 5s
       retries: 20
 
   kafka:
     image: apache/kafka:3.7.0
-    container_name: wb-kafka
+    container_name: sr-kafka
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -78,7 +79,10 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      CLUSTER_ID: "wbpipeline-kraft-cluster-1"
+      CLUSTER_ID: "self-reliance-kraft-cluster-1"
+      # Left to itself the JVM sizes its heap off the Docker VM's RAM, which is
+      # far more than this workload needs and starves ClickHouse next door.
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports:
       - "29092:29092"
     healthcheck:
@@ -89,7 +93,7 @@ services:
 
   kafka-connect:
     image: debezium/connect:2.6
-    container_name: wb-kafka-connect
+    container_name: sr-kafka-connect
     depends_on:
       kafka:
         condition: service_healthy
@@ -97,10 +101,10 @@ services:
         condition: service_healthy
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
-      GROUP_ID: wb-connect-cluster
-      CONFIG_STORAGE_TOPIC: wb_connect_configs
-      OFFSET_STORAGE_TOPIC: wb_connect_offsets
-      STATUS_STORAGE_TOPIC: wb_connect_statuses
+      GROUP_ID: sr-connect-cluster
+      CONFIG_STORAGE_TOPIC: sr_connect_configs
+      OFFSET_STORAGE_TOPIC: sr_connect_offsets
+      STATUS_STORAGE_TOPIC: sr_connect_statuses
       CONFIG_STORAGE_REPLICATION_FACTOR: 1
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
@@ -108,6 +112,7 @@ services:
       VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports:
       - "8083:8083"
     healthcheck:
@@ -119,11 +124,15 @@ services:
   connector-init:
     build:
       context: ./apps/cdc
-    container_name: wb-connector-init
+    container_name: sr-connector-init
+    # Same credentials the postgres service is started with, so the Debezium
+    # connector follows .env instead of shipping its own hardcoded copy.
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-worldbank}
-      POSTGRES_USER: ${POSTGRES_USER:-wb_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wb_app_pw}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-self_reliance}
+      POSTGRES_USER: ${POSTGRES_USER:-sr_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sr_app_pw}
     depends_on:
       kafka-connect:
         condition: service_healthy
@@ -131,19 +140,21 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8
-    container_name: wb-clickhouse
+    container_name: sr-clickhouse
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-worldbank}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-self_reliance}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_pw}
     ports:
       - "8123:8123"
       - "9000:9000"
       - "9363:9363"
+    mem_limit: 1400m
     volumes:
       - ch-data:/var/lib/clickhouse
       - ./apps/warehouse/init:/docker-entrypoint-initdb.d
       - ./apps/warehouse/config/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml
+      - ./apps/warehouse/config/memory.xml:/etc/clickhouse-server/config.d/memory.xml
     healthcheck:
       test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
       interval: 5s
@@ -152,7 +163,7 @@ services:
 
   airflow-init:
     <<: *airflow-common
-    container_name: wb-airflow-init
+    container_name: sr-airflow-init
     entrypoint: /bin/bash
     command: -c "airflow db migrate && airflow users create --username ${AIRFLOW_ADMIN_USER:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname Admin --lastname User --role Admin --email admin@example.com || true"
     depends_on:
@@ -163,8 +174,16 @@ services:
 
   airflow-webserver:
     <<: *airflow-common
-    container_name: wb-airflow-webserver
+    container_name: sr-airflow-webserver
     command: webserver
+    environment:
+      <<: *airflow-common-env
+      # Each gunicorn worker loads the whole DAG bag. Four of them reached
+      # 1.4 GB here and OOM-killed ClickHouse and Kafka Connect; two is ample
+      # for a single-user local UI and holds it near the 704m that
+      # deploy/compose.prod.yml already proved sufficient on the droplet.
+      AIRFLOW__WEBSERVER__WORKERS: "2"
+    mem_limit: 900m
     ports:
       - "8080:8080"
     depends_on:
@@ -178,7 +197,7 @@ services:
 
   airflow-scheduler:
     <<: *airflow-common
-    container_name: wb-airflow-scheduler
+    container_name: sr-airflow-scheduler
     command: scheduler
     depends_on:
       airflow-init:
@@ -187,12 +206,12 @@ services:
   metrics-exporter:
     build:
       context: ./apps/observability/metrics_exporter
-    container_name: wb-metrics-exporter
+    container_name: sr-metrics-exporter
     environment:
       POSTGRES_HOST: postgres
-      POSTGRES_DB: ${POSTGRES_DB:-worldbank}
-      POSTGRES_USER: ${POSTGRES_USER:-wb_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wb_app_pw}
+      POSTGRES_DB: ${POSTGRES_DB:-self_reliance}
+      POSTGRES_USER: ${POSTGRES_USER:-sr_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sr_app_pw}
       CLICKHOUSE_HOST: clickhouse
       CLICKHOUSE_HTTP_PORT: "8123"
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-default}
@@ -207,7 +226,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.53.0
-    container_name: wb-prometheus
+    container_name: sr-prometheus
     volumes:
       - ./apps/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prom-data:/prometheus
@@ -216,7 +235,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.1.0
-    container_name: wb-grafana
+    container_name: sr-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -229,9 +248,47 @@ services:
     depends_on:
       - prometheus
 
+  # Optional BI/self-service analytics layer over the ClickHouse marts.
+  #
+  # Deliberately NOT part of the default stack: it sits behind the `bi` profile
+  # so `docker compose up` never starts it. Two reasons — a second JVM next to
+  # Airflow's does not fit in a 4 GB Docker VM alongside Kafka and ClickHouse,
+  # and Metabase OSS has no dashboards-as-code (serialization is an enterprise
+  # feature), so its dashboards cannot be version-controlled the way the Grafana
+  # ones in apps/observability are. Grafana remains the reproducible surface;
+  # Metabase is for ad-hoc business exploration.
+  #
+  # Start with:  docker compose --profile bi up -d metabase
+  # Full setup and connection details: apps/bi/README.md
+  metabase:
+    image: metabase/metabase:v0.50.21
+    container_name: sr-metabase
+    profiles: ["bi"]
+    environment:
+      # Metabase's own application database (questions, dashboards, users).
+      # H2 on a named volume is fine for a single-node local deployment.
+      MB_DB_TYPE: h2
+      MB_DB_FILE: /metabase-data/metabase.db
+      MB_PLUGINS_DIR: /plugins
+      MB_JETTY_PORT: "3000"
+      # Capped so it cannot starve ClickHouse on a small Docker VM.
+      JAVA_OPTS: "-Xmx1g -XX:MaxRAMPercentage=50"
+    volumes:
+      # Drop the ClickHouse community driver here first: apps/bi/fetch-driver.sh
+      - ./apps/bi/plugins:/plugins
+      - metabase-data:/metabase-data
+    ports:
+      # 3000 is Grafana's; Metabase is published on 3001.
+      - "${METABASE_PORT:-3001}:3000"
+    mem_limit: 1500m
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
 volumes:
   pg-data:
   ch-data:
   prom-data:
   grafana-data:
   airflow-state:
+  metabase-data:

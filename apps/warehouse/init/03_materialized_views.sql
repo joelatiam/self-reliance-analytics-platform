@@ -2,8 +2,8 @@
 -- create/read/update events (deletes are out of scope for this MVP,
 -- see design report "known limitations").
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_countries
-    TO worldbank.raw_countries AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_countries
+    TO self_reliance.raw_countries AS
 SELECT
     JSONExtract(json, 'after', 'iso2_code', 'String')            AS iso2_code,
     JSONExtract(json, 'after', 'iso3_code', 'Nullable(String)')  AS iso3_code,
@@ -15,11 +15,11 @@ SELECT
     JSONExtract(json, 'after', 'latitude', 'Nullable(Float64)')  AS latitude,
     JSONExtract(json, 'op', 'String')                            AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                          AS ts_ms
-FROM worldbank.kafka_countries
+FROM self_reliance.kafka_countries
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_indicators
-    TO worldbank.raw_indicators AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_indicators
+    TO self_reliance.raw_indicators AS
 SELECT
     JSONExtract(json, 'after', 'code', 'String')                          AS code,
     JSONExtract(json, 'after', 'name', 'String')                          AS name,
@@ -27,11 +27,11 @@ SELECT
     JSONExtract(json, 'after', 'source_organization', 'Nullable(String)') AS source_organization,
     JSONExtract(json, 'op', 'String')                                     AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                   AS ts_ms
-FROM worldbank.kafka_indicators
+FROM self_reliance.kafka_indicators
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_observations
-    TO worldbank.raw_observations AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_observations
+    TO self_reliance.raw_observations AS
 SELECT
     JSONExtract(json, 'after', 'country_code', 'String')          AS country_code,
     JSONExtract(json, 'after', 'indicator_code', 'String')        AS indicator_code,
@@ -42,11 +42,11 @@ SELECT
     JSONExtract(json, 'after', 'decimal_places', 'Nullable(Int32)') AS decimal_places,
     JSONExtract(json, 'op', 'String')                             AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                           AS ts_ms
-FROM worldbank.kafka_observations
+FROM self_reliance.kafka_observations
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_refugee_statistics
-    TO worldbank.raw_refugee_statistics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_refugee_statistics
+    TO self_reliance.raw_refugee_statistics AS
 SELECT
     JSONExtract(json, 'after', 'country_iso3', 'String')               AS country_iso3,
     JSONExtract(json, 'after', 'year', 'Int32')                        AS year,
@@ -60,15 +60,15 @@ SELECT
     JSONExtract(json, 'after', 'host_community', 'Nullable(Int64)')    AS host_community,
     JSONExtract(json, 'op', 'String')                                  AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                AS ts_ms
-FROM worldbank.kafka_refugee_statistics
+FROM self_reliance.kafka_refugee_statistics
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
 -- Client activity. Debezium sends DATE as days since epoch (ClickHouse converts
 -- that straight into a Date column), TIMESTAMPTZ as an ISO-8601 string, and —
 -- with decimal.handling.mode=double on the connector — NUMERIC as a plain
 -- number rather than base64 bytes.
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_clients
-    TO worldbank.raw_clients AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_clients
+    TO self_reliance.raw_clients AS
 SELECT
     JSONExtract(json, 'after', 'client_code', 'String')                   AS client_code,
     JSONExtract(json, 'after', 'first_name', 'Nullable(String)')          AS first_name,
@@ -95,11 +95,11 @@ SELECT
     JSONExtract(json, 'after', 'status', 'Nullable(String)')              AS status,
     JSONExtract(json, 'op', 'String')                                     AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                   AS ts_ms
-FROM worldbank.kafka_clients
+FROM self_reliance.kafka_clients
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_businesses
-    TO worldbank.raw_businesses AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_businesses
+    TO self_reliance.raw_businesses AS
 SELECT
     JSONExtract(json, 'after', 'business_code', 'String')                          AS business_code,
     JSONExtract(json, 'after', 'client_code', 'String')                            AS client_code,
@@ -124,11 +124,11 @@ SELECT
     JSONExtract(json, 'after', 'status', 'Nullable(String)')                       AS status,
     JSONExtract(json, 'op', 'String')                                              AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                            AS ts_ms
-FROM worldbank.kafka_businesses
+FROM self_reliance.kafka_businesses
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_loans
-    TO worldbank.raw_loans AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_loans
+    TO self_reliance.raw_loans AS
 SELECT
     JSONExtract(json, 'after', 'loan_code', 'String')                        AS loan_code,
     JSONExtract(json, 'after', 'client_code', 'String')                      AS client_code,
@@ -154,11 +154,11 @@ SELECT
     JSONExtract(json, 'after', 'status', 'Nullable(String)')                 AS status,
     JSONExtract(json, 'op', 'String')                                        AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                      AS ts_ms
-FROM worldbank.kafka_loans
+FROM self_reliance.kafka_loans
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_loan_repayments
-    TO worldbank.raw_loan_repayments AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_loan_repayments
+    TO self_reliance.raw_loan_repayments AS
 SELECT
     JSONExtract(json, 'after', 'repayment_code', 'String')                AS repayment_code,
     JSONExtract(json, 'after', 'loan_code', 'String')                     AS loan_code,
@@ -176,11 +176,11 @@ SELECT
     JSONExtract(json, 'after', 'method', 'Nullable(String)')              AS method,
     JSONExtract(json, 'op', 'String')                                     AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                   AS ts_ms
-FROM worldbank.kafka_loan_repayments
+FROM self_reliance.kafka_loan_repayments
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_advisory_sessions
-    TO worldbank.raw_advisory_sessions AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_advisory_sessions
+    TO self_reliance.raw_advisory_sessions AS
 SELECT
     JSONExtract(json, 'after', 'session_code', 'String')                  AS session_code,
     JSONExtract(json, 'after', 'client_code', 'String')                   AS client_code,
@@ -197,11 +197,11 @@ SELECT
     JSONExtract(json, 'after', 'satisfaction_score', 'Nullable(Int32)')   AS satisfaction_score,
     JSONExtract(json, 'op', 'String')                                     AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                   AS ts_ms
-FROM worldbank.kafka_advisory_sessions
+FROM self_reliance.kafka_advisory_sessions
 WHERE JSONExtract(json, 'op', 'String') != 'd';
 
-CREATE MATERIALIZED VIEW IF NOT EXISTS worldbank.mv_business_monthly_metrics
-    TO worldbank.raw_business_monthly_metrics AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS self_reliance.mv_business_monthly_metrics
+    TO self_reliance.raw_business_monthly_metrics AS
 SELECT
     JSONExtract(json, 'after', 'business_code', 'String')                 AS business_code,
     JSONExtract(json, 'after', 'period', 'String')                        AS period,
@@ -216,5 +216,5 @@ SELECT
     JSONExtract(json, 'after', 'revenue_growth_pct', 'Nullable(Float64)') AS revenue_growth_pct,
     JSONExtract(json, 'op', 'String')                                     AS op,
     JSONExtract(json, 'ts_ms', 'Int64')                                   AS ts_ms
-FROM worldbank.kafka_business_monthly_metrics
+FROM self_reliance.kafka_business_monthly_metrics
 WHERE JSONExtract(json, 'op', 'String') != 'd';

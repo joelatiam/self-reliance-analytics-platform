@@ -1,14 +1,14 @@
-name: worldbank_indicators
+name: self_reliance_analytics
 version: "1.0.0"
 config-version: 2
-profile: worldbank_indicators
+profile: self_reliance_analytics
 
 model-paths: ["models"]
 test-paths: ["tests"]
 clean-targets: ["target", "dbt_packages"]
 
 models:
-  worldbank_indicators:
+  self_reliance_analytics:
     staging:
       +materialized: view
     marts:
