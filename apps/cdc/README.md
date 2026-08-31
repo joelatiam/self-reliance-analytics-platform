@@ -15,7 +15,7 @@ Dockerfile                    Builds the one-shot connector-init image
 
 1. `connector-init` (in `docker-compose.yml`) waits for Kafka Connect's REST API to be healthy.
 2. It POSTs `debezium/postgres-connector.json` to `http://kafka-connect:8083/connectors`, registering the connector.
-3. Debezium uses PostgreSQL logical replication (`pgoutput` plugin) to stream row changes to Kafka topics named `wb.public.<table>`, for:
+3. Debezium uses PostgreSQL logical replication (`pgoutput` plugin) to stream row changes to Kafka topics named `sr.public.<table>`, for:
    - the country aggregates: `public.countries`, `public.indicators`, `public.observations`, `public.refugee_statistics`
    - the operational client activity: `public.clients`, `public.businesses`, `public.loans`, `public.loan_repayments`, `public.advisory_sessions`, `public.business_monthly_metrics`
 
@@ -26,7 +26,7 @@ Adding a new replicated table means updating `table.include.list` in `postgres-c
 ## Check it
 
 ```bash
-curl http://localhost:8083/connectors/wb-postgres-source/status
+curl http://localhost:8083/connectors/sr-postgres-source/status
 ```
 
 See [`apps/warehouse`](../warehouse/README.md) for how these Kafka topics get consumed into ClickHouse.

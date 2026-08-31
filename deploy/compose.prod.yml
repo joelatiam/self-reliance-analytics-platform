@@ -42,7 +42,7 @@ services:
 
   kafka-connect:
     restart: unless-stopped
-    mem_limit: 640m
+    mem_limit: 1024m
     environment:
       KAFKA_HEAP_OPTS: "-Xmx512m -Xms256m"
     ports: !override
@@ -50,7 +50,7 @@ services:
 
   clickhouse:
     restart: unless-stopped
-    mem_limit: 640m
+    mem_limit: 1280m
     volumes:
       - ./deploy/clickhouse-memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
     ports: !override
@@ -65,14 +65,14 @@ services:
   # build artefacts have no business in a checkout that deploy.sh hard-resets.
   airflow-webserver:
     restart: unless-stopped
-    mem_limit: 896m
+    mem_limit: 1536m
     environment:
       DBT_LOG_PATH: /tmp/dbt/logs
       DBT_TARGET_PATH: /tmp/dbt/target
       # Airflow spawns 4 gunicorn workers by default. On 2 vCPUs that buys no
       # concurrency and costs ~350 MB — it was the single largest consumer on
       # the box and sat pinned at its ceiling. Two is plenty for a demo UI.
-      AIRFLOW__WEBSERVER__WORKERS: "2"
+      AIRFLOW__WEBSERVER__WORKERS: "3"
     ports: !override
       - "127.0.0.1:8080:8080"
 
