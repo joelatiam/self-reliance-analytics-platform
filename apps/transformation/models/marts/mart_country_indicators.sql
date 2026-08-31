@@ -1,12 +1,13 @@
 {{ config(
     engine='MergeTree()',
-    order_by=['indicator_code', 'country_code', 'year'],
-    partition_by='indicator_code'
+    order_by=['indicator_code', 'country_code', 'year']
 ) }}
 
 -- Denormalized, analytics-ready fact table: one row per
--- country x indicator x year, ordered/partitioned for the
--- "trend by indicator" queries this pipeline is built for.
+-- country x indicator x year, sorted for the "trend by indicator" queries this
+-- pipeline is built for. Not partitioned: indicator_code is already the leading
+-- sorting key, so a partition on it prunes nothing the primary index does not
+-- and only multiplies parts.
 select
     o.country_code,
     c.name as country_name,

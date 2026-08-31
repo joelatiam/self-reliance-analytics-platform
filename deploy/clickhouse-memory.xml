@@ -1,15 +1,32 @@
-<!-- ClickHouse defaults to ~90% of host RAM. On a shared 4 GB box that starves
-     everything else, so the server is held to a hard ceiling with correspondingly
-     small caches. Fine for this dataset (thousands of rows, not billions). -->
+<!-- Sized for the 8 GB / 4 vCPU droplet. ClickHouse defaults to ~90% of host
+     RAM, which starves the rest of the stack, so the server is still held to a
+     hard ceiling — just one that matches the box it now runs on rather than the
+     4 GB one it was first tuned for.
+
+     Deliberately diverges from apps/warehouse/config/memory.xml, which stays at
+     the smaller numbers because the local Docker VM has 3.8 GB for the whole
+     stack.
+
+     The query cache is NOT enabled here. It is invalidated by TTL only, never by
+     writes, and the `default` profile is shared with dbt — a mart built from a
+     cached read of the mart below it would be silently stale. Enabling it means
+     giving the BI connection its own read-only user and profile. -->
 <clickhouse>
-    <max_server_memory_usage>1073741824</max_server_memory_usage>
+    <max_server_memory_usage>1610612736</max_server_memory_usage>
     <mark_cache_size>134217728</mark_cache_size>
-    <uncompressed_cache_size>0</uncompressed_cache_size>
+    <!-- The BI dashboards rescan the same few small marts over and over, which
+         is the one access pattern the uncompressed cache is actually for. It is
+         keyed on data parts, so a dbt rebuild invalidates it correctly. -->
+    <uncompressed_cache_size>134217728</uncompressed_cache_size>
     <max_concurrent_queries>20</max_concurrent_queries>
     <profiles>
         <default>
-            <max_memory_usage>419430400</max_memory_usage>
-            <max_threads>2</max_threads>
+            <max_memory_usage>734003200</max_memory_usage>
+            <!-- One thread per vCPU. Left at 2 through the resize, which halved
+                 the box's capacity for exactly the dbt builds that contend with
+                 dashboard queries. -->
+            <max_threads>4</max_threads>
+            <use_uncompressed_cache>1</use_uncompressed_cache>
         </default>
     </profiles>
 </clickhouse>
