@@ -2,7 +2,7 @@
      everything else, so the server is held to a hard ceiling with correspondingly
      small caches. Fine for this dataset (thousands of rows, not billions). -->
 <clickhouse>
-    <max_server_memory_usage>629145600</max_server_memory_usage>
+    <max_server_memory_usage>1073741824</max_server_memory_usage>
     <mark_cache_size>134217728</mark_cache_size>
     <uncompressed_cache_size>0</uncompressed_cache_size>
     <max_concurrent_queries>20</max_concurrent_queries>

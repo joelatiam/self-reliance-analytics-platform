@@ -30,6 +30,9 @@ services:
       MB_SITE_URL: "https://bi.${APP_DOMAIN:-joelatiam.com}"
     volumes:
       - metabase-data:/metabase-data
+      # Metabase ships no ClickHouse driver; the jar is fetched into this
+      # directory by deploy/provision/86-metabase-driver.sh and loaded at boot.
+      - /var/www/production/metabase-plugins:/plugins:ro
     ports:
       - "127.0.0.1:3001:3001"
     healthcheck:
