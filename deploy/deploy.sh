@@ -94,11 +94,39 @@ echo "==> building changed images"
 "${COMPOSE[@]}" build --pull
 
 echo "==> starting stack"
-"${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 420 || {
+"${COMPOSE[@]}" up -d --remove-orphans
+
+# `--wait` counts a container that exits as a failure, so the one-shots cannot be
+# part of the gate: connector-init registers the Debezium connector and stops,
+# airflow-init migrates the Airflow DB and stops. Including them made a healthy
+# deploy report failure the moment connector-init finished — the wait returned in
+# ~90s of a 420s budget, while Airflow was still legitimately starting. They are
+# checked by exit code below instead, which is what actually matters for them.
+ONE_SHOT=(connector-init airflow-init)
+WAIT_FOR=()
+while read -r service; do
+  case " ${ONE_SHOT[*]} " in *" $service "*) continue ;; esac
+  WAIT_FOR+=("$service")
+done < <("${COMPOSE[@]}" config --services)
+
+echo "==> waiting for ${#WAIT_FOR[@]} long-running services"
+"${COMPOSE[@]}" up -d --no-recreate --wait --wait-timeout 420 "${WAIT_FOR[@]}" || {
   echo "!! some services did not become healthy:" >&2
   "${COMPOSE[@]}" ps >&2
   exit 1
 }
+
+# A one-shot that failed is a real failure — it just is not a health failure.
+for service in "${ONE_SHOT[@]}"; do
+  container=$("${COMPOSE[@]}" ps -aq "$service" 2>/dev/null | head -1)
+  [ -n "$container" ] || continue
+  read -r state code < <(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$container")
+  if [ "$state" = "exited" ] && [ "$code" != "0" ]; then
+    echo "!! $service exited $code" >&2
+    "${COMPOSE[@]}" logs --tail 40 "$service" >&2
+    exit 1
+  fi
+done
 
 echo "==> reclaiming disk"
 docker image prune -f >/dev/null
