@@ -27,6 +27,7 @@ touches Metabase. Bringing it up is a deliberate, documented opt-in.
 fetch-driver.sh       One-time download of the ClickHouse community driver
 setup-collections.sh  Creates the collection tree over the API (idempotent)
 cleanup-sample-content.sh  Clears the Examples collection and Sample Database
+organize-content.py   Files existing questions/dashboards into the collections
 plugins/              Where that driver jar lands (mounted into the container)
 ```
 
@@ -200,6 +201,29 @@ Self-Reliance Analytics
 
 Collections are the one part of the Metabase workspace that *is* reproducible —
 they are plain API objects, unlike the dashboards.
+
+### Filing existing content
+
+`setup-collections.sh` creates the shelves; questions and dashboards built before
+it ran stay where they were. [`organize-content.py`](organize-content.py) files
+them:
+
+```bash
+MB_URL=https://bi.example.com ./apps/bi/organize-content.py           # show the plan
+MB_URL=https://bi.example.com ./apps/bi/organize-content.py --apply   # make the moves
+```
+
+A question's destination comes from the table it actually queries — resolved from
+`source-table` for query-builder questions and by scanning the SQL for native
+ones — not from its name, because names drift and the query does not. Staging
+tables file with the mart they feed, so an ad-hoc question over `stg_loans` lands
+with the lending marts.
+
+A dashboard follows its cards: the collection most of them belong to, or the top
+of the tree if it spans several. Anything whose source is unrecognised is listed
+as skipped and left alone.
+
+Dry run by default. Nothing moves until `--apply`.
 
 ## Turning off the sample content
 
