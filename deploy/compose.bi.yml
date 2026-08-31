@@ -30,6 +30,12 @@ services:
       # unbounded and the heap given room.
       JAVA_OPTS: "-Xmx2g"
       MB_SITE_URL: "https://bi.${APP_DOMAIN:-joelatiam.com}"
+      # Metabase seeds an "Examples" collection and a Sample Database on first
+      # boot. Off here: this instance has one purpose, and demo content next to
+      # the real marts makes the collection tree harder to read, not easier.
+      # Only affects a fresh application database — an instance that already
+      # created them needs them removed once (see apps/bi/README.md).
+      MB_LOAD_SAMPLE_CONTENT: "false"
     volumes:
       - metabase-data:/metabase-data
       # Metabase ships no ClickHouse driver; the jar is fetched into this
