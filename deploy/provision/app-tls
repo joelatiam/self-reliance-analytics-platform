@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# app-tls <email> [subdomain ...] — wait for DNS, then issue Let's Encrypt
+# certificates for each subdomain and switch its vhost to HTTPS.
+#
+# Run by a human, not by automation: obtaining a certificate registers an ACME
+# account against your email and accepts the Let's Encrypt subscriber agreement.
+# That is your call to make, not a script's.
+#
+#   sudo app-tls you@example.com
+#   sudo app-tls you@example.com api airflow      # just these two
+#   sudo app-tls you@example.com @                # the bare domain only
+#
+# "@" means the apex. Everything else is treated as a subdomain label.
+set -euo pipefail
+
+DOMAIN=${DOMAIN:-joelatiam.com}
+EMAIL=${1:?usage: app-tls <email> [subdomain ...]}
+shift || true
+SUBS=("$@")
+[ ${#SUBS[@]} -eq 0 ] && SUBS=(@ www api airflow grafana bi)
+
+fqdn() { [ "$1" = "@" ] && echo "$DOMAIN" || echo "$1.$DOMAIN"; }
+
+IP=$(curl -fsS --max-time 10 https://api.ipify.org || echo "")
+echo "This host's public IP: ${IP:-unknown}"
+
+echo "==> waiting for DNS (up to 30 min)"
+DEADLINE=$(( $(date +%s) + 1800 ))
+PENDING=("${SUBS[@]}")
+while [ ${#PENDING[@]} -gt 0 ]; do
+  STILL=()
+  for s in "${PENDING[@]}"; do
+    NAME=$(fqdn "$s")
+    GOT=$(dig +short @1.1.1.1 "$NAME" A | tail -1)
+    if [ -n "$GOT" ] && { [ -z "$IP" ] || [ "$GOT" = "$IP" ]; }; then
+      echo "    $NAME -> $GOT"
+    else
+      STILL+=("$s")
+    fi
+  done
+  PENDING=("${STILL[@]}")
+  [ ${#PENDING[@]} -eq 0 ] && break
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    echo "!! still unresolved (or pointing elsewhere) after 30 min: ${PENDING[*]}" >&2
+    echo "   Check the A records at your registrar, then re-run." >&2
+    exit 1
+  fi
+  sleep 30
+done
+
+# One certificate per name, so an app can be added or removed without
+# reissuing everyone else's. The apex and www are the exception: they share a
+# single nginx server block, and a server block can only present one
+# certificate — issuing them separately leaves whichever ran last in place and
+# the other failing hostname verification. They get one cert with both SANs.
+FAILED=()
+APEX_PAIR=()
+SOLO=()
+for s in "${SUBS[@]}"; do
+  case "$s" in
+    @|www) APEX_PAIR+=("$s") ;;
+    *)     SOLO+=("$s") ;;
+  esac
+done
+
+if [ ${#APEX_PAIR[@]} -gt 0 ]; then
+  ARGS=()
+  for s in "${APEX_PAIR[@]}"; do ARGS+=(-d "$(fqdn "$s")"); done
+  echo "==> certificate for ${DOMAIN} (+ www, one cert, shared server block)"
+  if certbot --nginx --non-interactive --agree-tos -m "$EMAIL" \
+       --redirect --keep-until-expiring --cert-name "$DOMAIN" --expand "${ARGS[@]}"; then
+    echo "    ok"
+  else
+    echo "    FAILED for ${DOMAIN}" >&2; FAILED+=("$DOMAIN")
+  fi
+fi
+
+for s in "${SOLO[@]}"; do
+  NAME=$(fqdn "$s")
+  echo "==> certificate for $NAME"
+  if certbot --nginx --non-interactive --agree-tos -m "$EMAIL" \
+       --redirect --keep-until-expiring -d "$NAME"; then
+    echo "    ok"
+  else
+    echo "    FAILED for $NAME" >&2; FAILED+=("$NAME")
+  fi
+done
+
+nginx -t && systemctl reload nginx
+echo "==> renewal timer: $(systemctl is-enabled certbot.timer 2>/dev/null || echo 'not enabled')"
+certbot certificates 2>/dev/null | grep -E "Certificate Name|Expiry Date" | sed 's/^/    /'
+
+if [ ${#FAILED[@]} -gt 0 ]; then
+  echo "!! failed: ${FAILED[*]}" >&2
+  exit 1
+fi
+echo "==> all certificates issued"

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# app-site <subdomain> [local-port] — create/refresh a vhost and reload nginx.
+#
+# With a port, requests proxy to 127.0.0.1:<port> and fall back to the
+# unavailable page whenever that upstream cannot be reached. With no port, the
+# vhost is a placeholder that always serves the unavailable page — useful for
+# an address that is reserved but has nothing deployed behind it yet.
+set -euo pipefail
+DOMAIN=${DOMAIN:-example.com}
+name=${1:?usage: app-site <subdomain> [local-port]}
+port=${2:-}
+[[ $name =~ ^[a-z0-9-]+$ ]] || { echo "bad subdomain: $name" >&2; exit 2; }
+[[ -z $port || $port =~ ^[0-9]+$ ]] || { echo "bad port: $port" >&2; exit 2; }
+
+FILE=/etc/nginx/sites-available/${name}.conf
+
+if [ -n "$port" ]; then
+  BODY="    location / {
+        proxy_pass http://127.0.0.1:${port};
+        include snippets/app-proxy.conf;
+    }
+
+    include snippets/app-errors.conf;"
+else
+  BODY="    # No application deployed here yet.
+    root /var/www/errors;
+    location = /unavailable.html { internal; }
+    location / { return 503; }
+    error_page 503 /unavailable.html;"
+fi
+
+# certbot rewrites these files in place when it installs a certificate; only
+# write a fresh HTTP-only vhost if one is not already managed.
+if [ -f "$FILE" ] && grep -q "managed by Certbot" "$FILE"; then
+  echo "${name}.${DOMAIN}: certbot-managed vhost already exists, leaving it alone."
+  exit 0
+fi
+
+cat > "$FILE" <<VHOST
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${name}.${DOMAIN};
+
+    access_log /var/log/nginx/${name}.access.log;
+    error_log  /var/log/nginx/${name}.error.log;
+
+${BODY}
+}
+VHOST
+ln -sf "$FILE" /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+if [ -n "$port" ]; then
+  echo "enabled ${name}.${DOMAIN} -> 127.0.0.1:${port}"
+else
+  echo "enabled ${name}.${DOMAIN} -> placeholder (unavailable page)"
+fi
