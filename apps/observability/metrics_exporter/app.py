@@ -5,11 +5,16 @@ rather than caching on a timer, so metrics never lag behind reality.
 """
 from __future__ import annotations
 
-import os
 import time
 
+import app_health
 import psycopg2
 import requests
+from datasources import (
+    _clickhouse_table_stats,
+    _postgres_row_counts,
+    _postgres_watermark_ages,
+)
 from prometheus_client import start_http_server
 from prometheus_client.core import REGISTRY, GaugeMetricFamily
 
@@ -40,87 +45,12 @@ WATERMARK_RESOURCES = [
 ]
 
 
-def _postgres_connection():
-    return psycopg2.connect(
-        host=os.environ["POSTGRES_HOST"],
-        port=os.environ.get("POSTGRES_PORT", "5432"),
-        dbname=os.environ["POSTGRES_DB"],
-        user=os.environ["POSTGRES_USER"],
-        password=os.environ["POSTGRES_PASSWORD"],
-        connect_timeout=5,
-    )
-
-
-def _postgres_row_counts(tables: list[str]) -> dict[str, int]:
-    """Row count per table; a table that does not exist yet reports nothing."""
-    counts: dict[str, int] = {}
-    conn = _postgres_connection()
-    try:
-        for table in tables:
-            with conn.cursor() as cur:
-                try:
-                    cur.execute(f"SELECT count(*) FROM {table}")
-                    counts[table] = cur.fetchone()[0]
-                except psycopg2.Error:
-                    conn.rollback()
-    finally:
-        conn.close()
-    return counts
-
-
-def _postgres_watermark_ages(resources: list[str]) -> dict[str, float]:
-    """Seconds since each resource's ingestion watermark last advanced."""
-    ages: dict[str, float] = {}
-    conn = _postgres_connection()
-    try:
-        with conn.cursor() as cur:
-            try:
-                cur.execute(
-                    "SELECT resource, extract(epoch from now() - updated_at) "
-                    "FROM ingestion_watermarks WHERE resource = ANY(%s)",
-                    (resources,),
-                )
-                ages = {row[0]: float(row[1]) for row in cur.fetchall()}
-            except psycopg2.Error:
-                conn.rollback()
-    finally:
-        conn.close()
-    return ages
-
-
-def _clickhouse_query(query: str) -> str:
-    url = f"http://{os.environ['CLICKHOUSE_HOST']}:{os.environ['CLICKHOUSE_HTTP_PORT']}/"
-    response = requests.get(
-        url,
-        params={"query": query},
-        auth=(os.environ["CLICKHOUSE_USER"], os.environ["CLICKHOUSE_PASSWORD"]),
-        timeout=5,
-    )
-    response.raise_for_status()
-    return response.text.strip()
-
-
-def _clickhouse_table_stats(tables: list[str]) -> dict[str, tuple[int, int]]:
-    """(row_count, max_ts_ms) per raw table."""
-    stats: dict[str, tuple[int, int]] = {}
-    for table in tables:
-        try:
-            raw = _clickhouse_query(
-                f"SELECT count(), max(ts_ms) FROM worldbank.raw_{table} FINAL FORMAT TSV"
-            )
-            count_str, max_ts_str = raw.split("\t")
-            stats[table] = (int(count_str), int(max_ts_str or 0))
-        except (requests.RequestException, ValueError):
-            continue
-    return stats
-
-
 class PipelineCollector:
     def collect(self):
         healthy = 1
 
         # A scrape must never raise: an unreachable dependency should surface as
-        # wb_pipeline_scrape_success 0, not as a dead exporter.
+        # sr_pipeline_scrape_success 0, not as a dead exporter.
         try:
             pg_counts = _postgres_row_counts(REPLICATED_TABLES)
             watermark_ages = _postgres_watermark_ages(WATERMARK_RESOURCES)
@@ -140,52 +70,47 @@ class PipelineCollector:
         ch_observations, ch_observations_max_ts = ch_stats.get("observations", (None, 0))
 
         yield GaugeMetricFamily(
-            "wb_pipeline_postgres_observations_total",
+            "sr_pipeline_postgres_observations_total",
             "Row count in the Postgres observations table (OLTP source of truth)",
             value=pg_observations or 0,
         )
         yield GaugeMetricFamily(
-            "wb_pipeline_clickhouse_observations_total",
+            "sr_pipeline_clickhouse_observations_total",
             "Row count in the ClickHouse raw_observations table (CDC-landed)",
             value=ch_observations or 0,
         )
 
-        lag_rows = (
-            (pg_observations - ch_observations)
-            if (pg_observations is not None and ch_observations is not None)
-            else 0
-        )
-        yield GaugeMetricFamily(
-            "wb_pipeline_cdc_lag_rows",
-            "Postgres row count minus ClickHouse row count: CDC backlog proxy",
-            value=lag_rows,
-        )
+        # Both lag gauges are omitted rather than zeroed when the input is
+        # unknown: a zero here reads as "perfectly caught up" on the dashboard,
+        # which is the opposite of the truth while ClickHouse is unreachable.
+        if pg_observations is not None and ch_observations is not None:
+            yield GaugeMetricFamily(
+                "sr_pipeline_cdc_lag_rows",
+                "Postgres row count minus ClickHouse row count: CDC backlog proxy",
+                value=pg_observations - ch_observations,
+            )
 
-        lag_seconds = (
-            max(time.time() - (ch_observations_max_ts / 1000.0), 0)
-            if ch_observations_max_ts
-            else 0
-        )
-        yield GaugeMetricFamily(
-            "wb_pipeline_cdc_lag_seconds",
-            "Seconds since the most recent CDC event landed in ClickHouse",
-            value=lag_seconds,
-        )
+        if ch_observations_max_ts:
+            yield GaugeMetricFamily(
+                "sr_pipeline_cdc_lag_seconds",
+                "Seconds since the most recent CDC event landed in ClickHouse",
+                value=max(time.time() - (ch_observations_max_ts / 1000.0), 0),
+            )
 
         # Per-table breakdown, so a single stalled topic is visible instead of
         # being hidden behind a healthy aggregate.
         pg_rows = GaugeMetricFamily(
-            "wb_pipeline_postgres_rows_total",
+            "sr_pipeline_postgres_rows_total",
             "Row count per replicated Postgres table",
             labels=["table"],
         )
         ch_rows = GaugeMetricFamily(
-            "wb_pipeline_clickhouse_rows_total",
+            "sr_pipeline_clickhouse_rows_total",
             "Row count per CDC-landed ClickHouse raw table",
             labels=["table"],
         )
         table_lag_rows = GaugeMetricFamily(
-            "wb_pipeline_cdc_lag_rows_by_table",
+            "sr_pipeline_cdc_lag_rows_by_table",
             "Postgres minus ClickHouse row count, per replicated table",
             labels=["table"],
         )
@@ -206,7 +131,7 @@ class PipelineCollector:
         yield table_lag_rows
 
         watermark_age = GaugeMetricFamily(
-            "wb_pipeline_ingestion_watermark_age_seconds",
+            "sr_pipeline_ingestion_watermark_age_seconds",
             "Seconds since each clients API resource last advanced its watermark",
             labels=["resource"],
         )
@@ -214,8 +139,26 @@ class PipelineCollector:
             watermark_age.add_metric([resource], age)
         yield watermark_age
 
+        # Liveness of every app in the stack, so Grafana covers the whole
+        # platform rather than only the pipeline's data path.
+        app_up = GaugeMetricFamily(
+            "sr_pipeline_app_up",
+            "1 if the app answered its health check this scrape, else 0",
+            labels=["app", "kind"],
+        )
+        app_latency = GaugeMetricFamily(
+            "sr_pipeline_app_response_seconds",
+            "How long the app took to answer its health check",
+            labels=["app", "kind"],
+        )
+        for probe, up, elapsed in app_health.collect():
+            app_up.add_metric([probe.app, probe.kind], 1 if up else 0)
+            app_latency.add_metric([probe.app, probe.kind], elapsed)
+        yield app_up
+        yield app_latency
+
         yield GaugeMetricFamily(
-            "wb_pipeline_scrape_success",
+            "sr_pipeline_scrape_success",
             "1 if both Postgres and ClickHouse were reachable this scrape, else 0",
             value=healthy,
         )

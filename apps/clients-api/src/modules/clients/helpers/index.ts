@@ -7,3 +7,4 @@ export * from './loan-generator.helper';
 export * from './repayment-generator.helper';
 export * from './advisory-generator.helper';
 export * from './business-metric-generator.helper';
+export * from './keyset-pagination.helper';
