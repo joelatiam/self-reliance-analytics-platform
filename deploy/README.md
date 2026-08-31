@@ -1,7 +1,7 @@
 # Deployment
 
-The platform runs on a single DigitalOcean droplet (Frankfurt, 4 GB / 2 vCPU),
-behind nginx, deployed automatically when `main` goes green.
+The platform runs on a single DigitalOcean droplet (Frankfurt, 8 GB / 4 vCPU),
+behind nginx, deployed automatically when `production` goes green.
 
 ## How a deploy happens
 
@@ -57,7 +57,7 @@ Subdomains, each an nginx vhost with its own Let's Encrypt certificate:
 | `api.example.com`     | `127.0.0.1:4000` | clients-api (simulated source system) |
 | `airflow.example.com` | `127.0.0.1:8080` | Airflow UI |
 | `grafana.example.com` | `127.0.0.1:3000` | Grafana dashboards |
-| `bi.example.com`      | — | reserved; no application deployed behind it yet |
+| `bi.example.com`      | `127.0.0.1:3001` | Metabase (BI) |
 
 When an upstream cannot be reached — service stopped, mid-restart, or never
 deployed — the vhost serves a plain "this application isn't available" page
@@ -101,10 +101,11 @@ ssh -L 9090:localhost:9090 -L 8123:localhost:8123 <admin>@<droplet-ip>
 
 ## Memory
 
-The droplet has 3.8 GB usable and the stack wants ~5–6 GB unconstrained, so
+The stack wants ~5–6 GB unconstrained and Metabase another ~2.5 GB on top, so
 [`compose.prod.yml`](compose.prod.yml) caps every service and
-[`clickhouse-memory.xml`](clickhouse-memory.xml) holds ClickHouse to 600 MB.
-Both JVMs are pinned to a 512 MB heap and a 4 GB swapfile absorbs spikes.
+[`clickhouse-memory.xml`](clickhouse-memory.xml) holds ClickHouse to 1.5 GB.
+Caps are ceilings, not reservations, so they sum to more than the box has by
+design; measured steady state is well under it.
 
 Caps were sized from measured `docker stats`, not guessed, after a first pass
 got Airflow wrong in both directions. Two findings worth keeping:
@@ -113,11 +114,13 @@ got Airflow wrong in both directions. Two findings worth keeping:
   build, not its idle footprint. Starved, dbt dies before its logger starts and
   exits 2 with no output whatsoever.
 - **The webserver is the largest consumer**, mostly gunicorn workers. Airflow
-  defaults to 4, which buys nothing on 2 vCPUs; it runs 2 here.
+  defaults to 4; it runs 3 here.
 
-Steady state after a full pipeline run: ~2.8 GB resident, ~350 MB swap. It fits,
-but there is little slack — this is tuned to fit, not to perform. On a larger
-box the caps stay valid (they are ceilings, not reservations); just raise them.
+The droplet was 4 GB / 2 vCPU until Metabase needed room, and several settings
+outlived that box. `max_threads` in particular stayed at 2 through the resize,
+which left half the vCPUs idle during the dbt builds that contend with dashboard
+queries. Worth re-reading the ceilings against `docker stats` after any resize
+rather than assuming they still describe the machine.
 
 Check with `sudo app-status`, or per-service ceiling pressure with:
 
