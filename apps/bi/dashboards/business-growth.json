@@ -1,0 +1,53 @@
+{
+  "collection": "Business Growth",
+  "dashboard": {
+    "name": "Business Growth",
+    "description": "Did support move the needle? Growth is measured against the revenue captured at enrolment, not against business size."
+  },
+  "cards": [
+    {
+      "name": "Revenue growth by sector",
+      "description": "Average and median growth, so one runaway business cannot carry a sector.",
+      "display": "bar",
+      "size_x": 12, "size_y": 7, "row": 0, "col": 0,
+      "sql": "select sector,\n       round(avg(avg_revenue_growth_pct), 2) as avg_growth_pct,\n       round(avg(median_revenue_growth_pct), 2) as median_growth_pct,\n       sum(businesses_reporting) as businesses\nfrom mart_business_growth\ngroup by sector\norder by avg_growth_pct desc",
+      "visualization_settings": {
+        "graph.dimensions": ["sector"],
+        "graph.metrics": ["avg_growth_pct", "median_growth_pct"],
+        "graph.y_axis.title_text": "% growth"
+      }
+    },
+    {
+      "name": "Revenue and profit by month",
+      "description": "Absolute performance of the businesses reporting each month.",
+      "display": "line",
+      "size_x": 12, "size_y": 7, "row": 0, "col": 12,
+      "sql": "select period, sum(revenue_usd) as revenue_usd, sum(profit_usd) as profit_usd\nfrom mart_business_growth\ngroup by period\norder by period",
+      "visualization_settings": {
+        "graph.dimensions": ["period"],
+        "graph.metrics": ["revenue_usd", "profit_usd"],
+        "graph.y_axis.title_text": "USD"
+      }
+    },
+    {
+      "name": "Share of businesses growing",
+      "description": "Breadth rather than size: how many businesses are growing at all.",
+      "display": "line",
+      "size_x": 12, "size_y": 7, "row": 7, "col": 0,
+      "sql": "select period, country_iso3, round(avg(growing_share_pct), 2) as growing_share_pct\nfrom mart_business_growth\ngroup by period, country_iso3\norder by period",
+      "visualization_settings": {
+        "graph.dimensions": ["period", "country_iso3"],
+        "graph.metrics": ["growing_share_pct"],
+        "graph.y_axis.title_text": "% growing"
+      }
+    },
+    {
+      "name": "Jobs and customers by sector",
+      "description": "What each sector supports beyond its own revenue.",
+      "display": "table",
+      "size_x": 12, "size_y": 7, "row": 7, "col": 12,
+      "sql": "select sector,\n       sum(businesses_reporting) as businesses,\n       sum(jobs_supported) as jobs_supported,\n       sum(customers_served) as customers_served,\n       round(sum(revenue_usd), 2) as revenue_usd\nfrom mart_business_growth\ngroup by sector\norder by revenue_usd desc",
+      "visualization_settings": {}
+    }
+  ]
+}

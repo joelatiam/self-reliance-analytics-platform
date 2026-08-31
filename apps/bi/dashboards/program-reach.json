@@ -1,0 +1,54 @@
+{
+  "collection": "Program Reach",
+  "dashboard": {
+    "name": "Program Reach",
+    "description": "Who the programme reaches: caseload size, who is in it, and the jobs the businesses behind it support."
+  },
+  "cards": [
+    {
+      "name": "Clients reached by country",
+      "description": "Mapped on ISO-2 codes, which is what the built-in world map matches on — the marts are keyed on ISO-3.",
+      "display": "map",
+      "size_x": 12, "size_y": 8, "row": 0, "col": 0,
+      "sql": "select c.iso2_code as country, p.clients_total as clients\nfrom mart_client_portfolio p\ninner join stg_countries c on p.country_iso3 = c.iso3_code\norder by clients desc",
+      "visualization_settings": {
+        "map.type": "region",
+        "map.region": "world_countries",
+        "map.dimension": "country",
+        "map.metric": "clients"
+      }
+    },
+    {
+      "name": "Inclusion shares by country",
+      "description": "Share of the caseload that is women, youth and displaced.",
+      "display": "bar",
+      "size_x": 12, "size_y": 8, "row": 0, "col": 12,
+      "sql": "select country_iso3, women_share_pct, youth_share_pct, displaced_share_pct\nfrom mart_client_portfolio\norder by displaced_share_pct desc",
+      "visualization_settings": {
+        "graph.dimensions": ["country_iso3"],
+        "graph.metrics": ["women_share_pct", "youth_share_pct", "displaced_share_pct"],
+        "graph.y_axis.title_text": "% of clients"
+      }
+    },
+    {
+      "name": "Jobs supported by country",
+      "description": "Total jobs, and how many are held by women and by displaced people.",
+      "display": "bar",
+      "size_x": 12, "size_y": 7, "row": 8, "col": 0,
+      "sql": "select country_iso3, jobs_supported, jobs_held_by_women, jobs_held_by_displaced\nfrom mart_client_portfolio\norder by jobs_supported desc",
+      "visualization_settings": {
+        "graph.dimensions": ["country_iso3"],
+        "graph.metrics": ["jobs_supported", "jobs_held_by_women", "jobs_held_by_displaced"],
+        "graph.y_axis.title_text": "Jobs"
+      }
+    },
+    {
+      "name": "Programme against country context",
+      "description": "Caseload next to the displaced population hosted and GDP growth — the operational picture against the macro one.",
+      "display": "table",
+      "size_x": 12, "size_y": 7, "row": 8, "col": 12,
+      "sql": "select country_name,\n       clients_total,\n       clients_displaced,\n       businesses_active,\n       jobs_supported,\n       par30_pct,\n       displaced_hosted,\n       displaced_clients_per_10k_hosted,\n       gdp_growth_pct\nfrom mart_country_program_context\norder by clients_total desc",
+      "visualization_settings": {}
+    }
+  ]
+}
