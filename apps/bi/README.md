@@ -28,6 +28,9 @@ fetch-driver.sh       One-time download of the ClickHouse community driver
 setup-collections.sh  Creates the collection tree over the API (idempotent)
 cleanup-sample-content.sh  Clears the Examples collection and Sample Database
 organize-content.py   Files existing questions/dashboards into the collections
+build-dashboards.py   Builds the questions and dashboards from dashboards/*.json
+dashboards/           One JSON spec per dashboard: SQL, display type, layout
+metabase_api.py       Shared API client for the Python scripts
 workspace.md          Questions, collections, and the map/ISO-code gotcha
 plugins/              Where that driver jar lands (mounted into the container)
 ```

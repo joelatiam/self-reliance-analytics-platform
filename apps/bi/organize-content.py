@@ -15,13 +15,15 @@ them.
 Auth matches the shell scripts: MB_URL and MB_SESSION from the environment, or
 prompts. The password goes straight into the session call and is never stored.
 """
-import getpass
 import json
 import os
+import pathlib
 import sys
-import urllib.error
-import urllib.request
 from collections import Counter
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from metabase_api import (ROOT_COLLECTION, collection_ids, connect,  # noqa: E402
+                          die_on_http_error)
 
 # Which collection each source table belongs to. Staging tables sit with the
 # mart they feed, so an ad-hoc question over stg_loans lands next to the lending
@@ -38,59 +40,6 @@ TABLE_COLLECTIONS = {
                         "mart_country_refugee_stats", "mart_indicator_yoy_growth"],
 }
 TABLE_TO_COLLECTION = {t: c for c, ts in TABLE_COLLECTIONS.items() for t in ts}
-ROOT_COLLECTION = "Self-Reliance Analytics"
-
-
-class Metabase:
-    def __init__(self, url, session):
-        self.url, self.session = url.rstrip("/"), session
-
-    def call(self, method, path, body=None):
-        req = urllib.request.Request(
-            f"{self.url}/api{path}", method=method,
-            data=json.dumps(body).encode() if body is not None else None,
-            headers={"Content-Type": "application/json",
-                     "X-Metabase-Session": self.session})
-        with urllib.request.urlopen(req) as r:
-            raw = r.read()
-        return json.loads(raw) if raw else None
-
-
-def login(url):
-    session = os.environ.get("MB_SESSION")
-    if session:
-        return session
-    email = input("Email: ")
-    password = getpass.getpass("Password: ")
-    req = urllib.request.Request(
-        f"{url.rstrip('/')}/api/session", method="POST",
-        data=json.dumps({"username": email, "password": password}).encode(),
-        headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req) as r:
-        return json.load(r)["id"]
-
-
-def collection_ids(mb):
-    """Map collection name -> id, restricted to our tree so a same-named
-    collection elsewhere in the instance is never targeted by accident."""
-    everything = mb.call("GET", "/collection")
-    root = next((c for c in everything
-                 if c.get("name") == ROOT_COLLECTION and not c.get("archived")), None)
-    if root is None:
-        sys.exit(f"'{ROOT_COLLECTION}' not found. Run setup-collections.sh first.")
-    ids = {ROOT_COLLECTION: root["id"]}
-    for c in everything:
-        if c.get("archived") or c.get("name") not in TABLE_COLLECTIONS:
-            continue
-        # Children carry a location path like "/12/"; fall back to parent_id.
-        location = c.get("location") or ""
-        if f"/{root['id']}/" in location or c.get("parent_id") == root["id"]:
-            ids[c["name"]] = c["id"]
-    missing = set(TABLE_COLLECTIONS) - set(ids)
-    if missing:
-        sys.exit(f"Missing collections: {', '.join(sorted(missing))}. "
-                 "Re-run setup-collections.sh.")
-    return ids
 
 
 def card_table(card, table_names):
@@ -144,9 +93,8 @@ def plan_moves(mb, ids):
 
 def main():
     apply = "--apply" in sys.argv
-    url = os.environ.get("MB_URL") or input("Metabase URL: ")
-    mb = Metabase(url, login(url))
-    moves, skipped = plan_moves(mb, collection_ids(mb))
+    mb = connect()
+    moves, skipped = plan_moves(mb, collection_ids(mb, TABLE_COLLECTIONS))
 
     for kind, _id, name, target, _ in moves:
         print(f"  {kind:9} {name!r} -> {target}")
@@ -166,7 +114,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except urllib.error.HTTPError as e:
-        sys.exit(f"HTTP {e.code} from Metabase: {e.read().decode()[:200]}")
+    die_on_http_error(main)
