@@ -1,0 +1,79 @@
+{
+  "collection": "Lending",
+  "dashboard": {
+    "name": "Lending",
+    "description": "The loan book: what was disbursed, what is outstanding, and what is at risk. PAR30 follows the microfinance convention so it is comparable with how the sector reports."
+  },
+  "cards": [
+    {
+      "name": "Portfolio at risk (PAR30) by disbursement month",
+      "description": "Share of outstanding principal more than 30 days past due.",
+      "display": "line",
+      "size_x": 12,
+      "size_y": 7,
+      "row": 0,
+      "col": 0,
+      "sql": "select disbursement_month, country_iso3, par30_pct\nfrom mart_loan_performance\norder by disbursement_month",
+      "visualization_settings": {
+        "graph.dimensions": [
+          "disbursement_month",
+          "country_iso3"
+        ],
+        "graph.metrics": [
+          "par30_pct"
+        ],
+        "graph.y_axis.title_text": "PAR30 %"
+      }
+    },
+    {
+      "name": "Principal disbursed by month",
+      "description": "Lending volume over time, all countries combined.",
+      "display": "bar",
+      "size_x": 12,
+      "size_y": 7,
+      "row": 0,
+      "col": 12,
+      "sql": "select disbursement_month, sum(principal_disbursed_usd) as principal_usd, sum(loans_disbursed) as loans\nfrom mart_loan_performance\ngroup by disbursement_month\norder by disbursement_month",
+      "visualization_settings": {
+        "graph.dimensions": [
+          "disbursement_month"
+        ],
+        "graph.metrics": [
+          "principal_usd"
+        ],
+        "graph.y_axis.title_text": "USD"
+      }
+    },
+    {
+      "name": "Loan book by country",
+      "description": "Disbursed, repaid, outstanding and at-risk balances per country.",
+      "display": "table",
+      "size_x": 12,
+      "size_y": 7,
+      "row": 7,
+      "col": 0,
+      "sql": "with by_country as (\n    select country_iso3,\n           sum(loans_disbursed)         as loans_disbursed,\n           sum(principal_disbursed_usd) as principal_usd,\n           sum(repaid_usd)              as repaid_usd,\n           sum(outstanding_usd)         as outstanding_usd,\n           sum(at_risk_usd)             as at_risk_usd,\n           sum(loans_written_off)       as written_off\n    from mart_loan_performance\n    group by country_iso3\n)\nselect country_iso3,\n       loans_disbursed,\n       round(principal_usd, 2)   as principal_usd,\n       round(repaid_usd, 2)      as repaid_usd,\n       round(outstanding_usd, 2) as outstanding_usd,\n       round(if(outstanding_usd > 0, at_risk_usd / outstanding_usd * 100, 0), 2) as par30_pct,\n       written_off\nfrom by_country\norder by principal_usd desc",
+      "visualization_settings": {}
+    },
+    {
+      "name": "Repayment punctuality by country",
+      "description": "On-time rate and how much of it arrives by mobile money.",
+      "display": "bar",
+      "size_x": 12,
+      "size_y": 7,
+      "row": 7,
+      "col": 12,
+      "sql": "select country_iso3, on_time_rate_pct, mobile_money_share_pct, avg_days_late_when_late\nfrom mart_repayment_performance\norder by on_time_rate_pct desc",
+      "visualization_settings": {
+        "graph.dimensions": [
+          "country_iso3"
+        ],
+        "graph.metrics": [
+          "on_time_rate_pct",
+          "mobile_money_share_pct"
+        ],
+        "graph.y_axis.title_text": "%"
+      }
+    }
+  ]
+}

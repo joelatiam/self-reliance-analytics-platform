@@ -134,6 +134,43 @@ as skipped and left alone.
 
 Dry run by default. Nothing moves until `--apply`.
 
+## Dashboards
+
+Metabase OSS cannot import dashboards — serialization is an enterprise feature —
+so [`build-dashboards.py`](build-dashboards.py) is the closest thing to
+dashboards-as-code the instance allows. The questions live in version control as
+SQL under [`dashboards/`](dashboards), one JSON file per dashboard, and the
+script replays them through the API.
+
+```bash
+MB_URL=https://bi.example.com ./apps/bi/build-dashboards.py           # show the plan
+MB_URL=https://bi.example.com ./apps/bi/build-dashboards.py --apply   # build them
+```
+
+Four dashboards, sixteen questions, one per collection:
+
+| Dashboard | Questions |
+|---|---|
+| Lending | PAR30 by disbursement month, principal disbursed, loan book by country, repayment punctuality |
+| Program Reach | Clients mapped by country, inclusion shares, jobs supported, programme against country context |
+| Business Growth | Revenue growth by sector, revenue and profit by month, share of businesses growing, jobs and customers |
+| Country Context | GDP growth, displaced population hosted, displacement mapped, biggest year-on-year moves |
+
+Idempotent by name within a collection: an existing card or dashboard is updated
+in place rather than duplicated, so editing a spec and re-running edits the real
+thing. Dashcards are replaced wholesale, which means the spec owns the layout —
+a card removed from the JSON disappears from the dashboard.
+
+SQL is unqualified, so it resolves to whichever database the Metabase connection
+points at. The two map questions join `stg_countries` for ISO-2 codes, for the
+reason in the section above.
+
+### Editing a dashboard
+
+Change the JSON and re-run with `--apply`. Changes made by clicking in Metabase
+are *not* read back into the spec, so the two drift apart if you edit both — the
+JSON wins on the next run.
+
 ## Turning off the sample content
 
 Metabase seeds an "Examples" collection and a Sample Database on first boot.
