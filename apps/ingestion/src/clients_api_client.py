@@ -51,27 +51,16 @@ class ClientsApiClient:
         resource: str,
         updated_since: str | None = None,
     ) -> Iterator[list[dict[str, Any]]]:
-        """Yield pages of rows for one resource, oldest change first.
-
-        Walks by keyset cursor rather than by page number. The source is being
-        written to while we read it, and under OFFSET paging a row updated
-        mid-walk moves to the end of the updated_at ordering and shifts an
-        unread row back into a page already consumed. That row is then never
-        collected, because the watermark advances past its timestamp. Following
-        meta.nextCursor pins each page to the last row's sort key instead, so
-        concurrent writes cannot move rows out of the walk.
-        """
+        """Yield pages of rows for one resource, oldest change first."""
         path = RESOURCE_PATHS.get(resource)
         if path is None:
             raise ValueError(f"Unknown clients API resource: {resource}")
 
-        cursor: str | None = None
+        page = 1
         while True:
-            params: dict[str, Any] = {"limit": self.page_size}
+            params: dict[str, Any] = {"page": page, "limit": self.page_size}
             if updated_since:
                 params["updatedSince"] = updated_since
-            if cursor:
-                params["cursor"] = cursor
 
             payload = self._get_json(path, params)
             rows = payload.get("data", [])
@@ -80,9 +69,10 @@ class ClientsApiClient:
             if rows:
                 yield rows
 
-            cursor = meta.get("nextCursor")
-            if not rows or not cursor:
+            total_pages = meta.get("totalPages", 0)
+            if not rows or page >= total_pages:
                 break
+            page += 1
 
     def fetch_summary(self, country: str | None = None) -> dict[str, Any]:
         """Portfolio rollup, used to sanity-check what was replicated."""

@@ -20,14 +20,4 @@ export class PaginationMetaDto {
     nullable: true,
   })
   maxUpdatedAt: string | null;
-
-  @ApiProperty({
-    description:
-      'Sort key of the last row in this page. Pass it back as `cursor` to read ' +
-      'the next page without OFFSET, which is the only way to page a table ' +
-      'that is being written to without skipping rows. Null when the walk is done.',
-    example: 'MjAyNi0wOC0zMFQxMDoyNTowMC40MTJafDE0OTIy',
-    nullable: true,
-  })
-  nextCursor: string | null;
 }

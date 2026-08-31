@@ -122,7 +122,7 @@ box the caps stay valid (they are ceilings, not reservations); just raise them.
 Check with `sudo app-status`, or per-service ceiling pressure with:
 
 ```bash
-docker exec sr-airflow-webserver cat /sys/fs/cgroup/memory.events
+docker exec wb-airflow-webserver cat /sys/fs/cgroup/memory.events
 ```
 
 A non-zero and climbing `max` means that service is being throttled at its cap.

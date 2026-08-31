@@ -15,9 +15,9 @@ def get_connection() -> Iterator[psycopg2.extensions.connection]:
     conn = psycopg2.connect(
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=os.environ.get("POSTGRES_PORT", "5432"),
-        dbname=os.environ.get("POSTGRES_DB", "self_reliance"),
-        user=os.environ.get("POSTGRES_USER", "sr_app"),
-        password=os.environ.get("POSTGRES_PASSWORD", "sr_app_pw"),
+        dbname=os.environ.get("POSTGRES_DB", "worldbank"),
+        user=os.environ.get("POSTGRES_USER", "wb_app"),
+        password=os.environ.get("POSTGRES_PASSWORD", "wb_app_pw"),
     )
     try:
         yield conn

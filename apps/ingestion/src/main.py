@@ -31,7 +31,6 @@ from db import (
     upsert_observations,
     upsert_refugee_statistics,
 )
-from schema import ensure_schema
 from transform import (
     CLIENT_ACTIVITY_PARSERS,
     parse_country,
@@ -47,7 +46,6 @@ logger = logging.getLogger("ingestion")
 
 
 def run_worldbank() -> None:
-    ensure_schema()
     base_url = os.environ.get("WORLD_BANK_BASE_URL", "https://api.worldbank.org/v2")
     countries = os.environ.get("WORLD_BANK_COUNTRIES", "RW,KE,ET,SS,TD").split(",")
     indicators = os.environ.get("WORLD_BANK_INDICATORS", "NY.GDP.MKTP.KD.ZG").split(",")
@@ -79,7 +77,6 @@ def run_worldbank() -> None:
 
 
 def run_refugee_stats() -> None:
-    ensure_schema()
     base_url = os.environ.get("UNHCR_BASE_URL", "https://api.unhcr.org/population/v1/population")
     countries = os.environ.get("UNHCR_COUNTRIES", "RWA,KEN,ETH,SSD,TCD").split(",")
     year_from = int(os.environ.get("UNHCR_YEAR_FROM", "2015"))
@@ -104,8 +101,6 @@ def run_client_activity() -> None:
     generates activity every ten minutes, so this pulls only what changed since
     the previous run rather than re-reading the whole caseload.
     """
-    ensure_schema()
-
     base_url = os.environ.get("CLIENTS_API_BASE_URL", DEFAULT_BASE_URL)
     api_key = os.environ.get("CLIENTS_API_KEY") or None
     page_size = int(os.environ.get("CLIENTS_API_PAGE_SIZE", "500"))

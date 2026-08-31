@@ -14,9 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r apps/ingestion/requirements.txt -r apps/observability/metrics_exporter/requirements.txt pytest ruff
-      - run: ruff check apps/ingestion apps/orchestration/dags apps/observability
-      - run: pytest apps/ingestion/tests apps/observability/metrics_exporter -v
+      - run: pip install -r apps/ingestion/requirements.txt pytest ruff
+      - run: ruff check apps/ingestion/src apps/orchestration/dags
+      - run: pytest apps/ingestion/tests -v
 
   clients-api:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
       clickhouse:
         image: clickhouse/clickhouse-server:24.8
         env:
-          CLICKHOUSE_DB: self_reliance
+          CLICKHOUSE_DB: worldbank
           CLICKHOUSE_PASSWORD: ci_password
         ports:
           - 8123:8123
@@ -75,7 +75,7 @@ jobs:
         env:
           CLICKHOUSE_HOST: 127.0.0.1
           CLICKHOUSE_HTTP_PORT: "8123"
-          CLICKHOUSE_DB: self_reliance
+          CLICKHOUSE_DB: worldbank
           CLICKHOUSE_USER: default
           CLICKHOUSE_PASSWORD: ci_password
           DBT_PROFILES_DIR: .

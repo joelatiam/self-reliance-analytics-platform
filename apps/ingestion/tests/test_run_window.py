@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from run_window import (
+from run_window import (  # noqa: E402
     STALE_RUN_LAG_SECONDS,
     describe_stale_run,
     is_stale_run,

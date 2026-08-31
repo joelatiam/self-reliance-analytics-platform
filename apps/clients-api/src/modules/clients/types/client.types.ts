@@ -8,8 +8,6 @@ export interface PaginatedResult<T> {
     totalPages: number;
     /** Highest updated_at in this page; the pipeline stores it as its watermark. */
     maxUpdatedAt: string | null;
-    /** Sort key of the last row; pass back as `cursor` to walk on. Null at the end. */
-    nextCursor: string | null;
   };
 }
 

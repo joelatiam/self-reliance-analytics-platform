@@ -49,9 +49,6 @@ services:
       clients-api-db:
         condition: service_healthy
     healthcheck:
-      # 127.0.0.1, not localhost: inside the container localhost resolves to
-      # ::1 first, and the app listens on IPv4 only, so the check was refused
-      # and the container sat "unhealthy" while serving fine.
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health || exit 1"]
       interval: 10s
       timeout: 5s

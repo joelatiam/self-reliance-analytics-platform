@@ -2,7 +2,7 @@
 -- ts_ms (Debezium event timestamp) is the version column, so a later
 -- update for the same key always wins on merge / with FINAL.
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_countries
+CREATE TABLE IF NOT EXISTS worldbank.raw_countries
 (
     iso2_code    String,
     iso3_code    Nullable(String),
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_countries
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY iso2_code;
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_indicators
+CREATE TABLE IF NOT EXISTS worldbank.raw_indicators
 (
     code                String,
     name                String,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_indicators
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY code;
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_observations
+CREATE TABLE IF NOT EXISTS worldbank.raw_observations
 (
     country_code   String,
     indicator_code String,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_observations
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_code, indicator_code, year);
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_refugee_statistics
+CREATE TABLE IF NOT EXISTS worldbank.raw_refugee_statistics
 (
     country_iso3       String,
     year               Int32,
@@ -71,7 +71,7 @@ ORDER BY (country_iso3, year);
 -- aggregates, so the ReplacingMergeTree version column matters more here: the
 -- same loan is replicated again on every repayment, and FINAL (or the dbt
 -- staging layer) collapses it to the latest state.
-CREATE TABLE IF NOT EXISTS self_reliance.raw_clients
+CREATE TABLE IF NOT EXISTS worldbank.raw_clients
 (
     client_code          String,
     first_name           Nullable(String),
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_clients
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_iso3, client_code);
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_businesses
+CREATE TABLE IF NOT EXISTS worldbank.raw_businesses
 (
     business_code                 String,
     client_code                   String,
@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_businesses
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_iso3, business_code);
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_loans
+CREATE TABLE IF NOT EXISTS worldbank.raw_loans
 (
     loan_code             String,
     client_code           String,
@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_loans
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_iso3, loan_code);
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_loan_repayments
+CREATE TABLE IF NOT EXISTS worldbank.raw_loan_repayments
 (
     repayment_code      String,
     loan_code           String,
@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_loan_repayments
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_iso3, repayment_code);
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_advisory_sessions
+CREATE TABLE IF NOT EXISTS worldbank.raw_advisory_sessions
 (
     session_code        String,
     client_code         String,
@@ -207,7 +207,7 @@ CREATE TABLE IF NOT EXISTS self_reliance.raw_advisory_sessions
 ENGINE = ReplacingMergeTree(ts_ms)
 ORDER BY (country_iso3, session_code);
 
-CREATE TABLE IF NOT EXISTS self_reliance.raw_business_monthly_metrics
+CREATE TABLE IF NOT EXISTS worldbank.raw_business_monthly_metrics
 (
     business_code       String,
     period              String,

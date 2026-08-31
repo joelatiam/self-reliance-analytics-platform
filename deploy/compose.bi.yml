@@ -34,7 +34,10 @@ services:
       - metabase-data:/metabase-data
       # Metabase ships no ClickHouse driver; the jar is fetched into this
       # directory by deploy/provision/86-metabase-driver.sh and loaded at boot.
-      - /var/www/production/metabase-plugins:/plugins:ro
+      # Must be writable and owned by the container's uid — Metabase's plugin
+      # loader initialises the directory on startup, and a read-only mount
+      # leaves the jar sitting there unloaded with no error worth the name.
+      - /var/www/production/metabase-plugins:/plugins
     ports:
       - "127.0.0.1:3001:3001"
     healthcheck:

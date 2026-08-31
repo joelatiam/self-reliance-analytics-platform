@@ -141,33 +141,19 @@ real dataset by accident.
 
 ## Reading it incrementally
 
-Each list endpoint orders by `(updated_at, id)` ascending and returns both the
-highest `updated_at` it saw and a cursor pointing at the last row:
+Each list endpoint pages by `updated_at` ascending and returns the highest one
+it saw:
 
 ```bash
 curl "http://localhost:4000/api/v1/loans?limit=500"
-# → { "data": [...], "meta": { ...,
-#      "maxUpdatedAt": "2026-08-30T10:25:00.512Z",
-#      "nextCursor":  "MjAyNi0wOC0zMFQxMDoyNTowMC41MTJafDE0OTIy" } }
+# → { "data": [...], "meta": { ..., "maxUpdatedAt": "2026-08-30T10:25:00.512Z" } }
+
+curl "http://localhost:4000/api/v1/loans?limit=500&updatedSince=2026-08-30T10:25:00.512Z"
 ```
 
-**Within a run, follow `nextCursor` until it comes back null:**
-
-```bash
-curl "http://localhost:4000/api/v1/loans?limit=500&cursor=MjAyNi0wOC0zMFQxMDoyNTowMC41MTJafDE0OTIy"
-```
-
-Do not walk this API with `page=2,3,4...`. The simulator is writing while you
-read, and under OFFSET paging a row updated mid-walk moves to the end of the
-`updated_at` ordering, shifting an unread row backwards into a page you already
-consumed. That row is then never collected, because the watermark advances past
-its timestamp. The cursor pins each page to the last row's sort key, so
-concurrent writes cannot move rows out of the walk. `page` still works for
-Swagger and for browsing by hand.
-
-**Between runs, feed `maxUpdatedAt` back as `updatedSince`** and you get only
-what changed. That is exactly what the ingestion app does, storing the
-watermark per resource between runs.
+Feed `maxUpdatedAt` back as `updatedSince` and you get only what changed. That
+is exactly what the ingestion app does, storing the watermark per resource
+between runs.
 
 ## Layout
 

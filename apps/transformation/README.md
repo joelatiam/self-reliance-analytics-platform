@@ -43,7 +43,7 @@ Every model has `not_null` / `unique` / `relationships` tests (see `_staging.yml
 ```bash
 pip install -r requirements.txt
 export DBT_PROFILES_DIR=.
-export CLICKHOUSE_HOST=localhost CLICKHOUSE_HTTP_PORT=8123 CLICKHOUSE_DB=self_reliance CLICKHOUSE_USER=default CLICKHOUSE_PASSWORD=clickhouse_pw
+export CLICKHOUSE_HOST=localhost CLICKHOUSE_HTTP_PORT=8123 CLICKHOUSE_DB=worldbank CLICKHOUSE_USER=default CLICKHOUSE_PASSWORD=clickhouse_pw
 dbt build
 ```
 

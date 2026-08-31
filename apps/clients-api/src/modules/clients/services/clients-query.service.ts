@@ -2,12 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ObjectLiteral, Repository, SelectQueryBuilder } from 'typeorm';
 
+import { DEFAULT_PAGE_SIZE } from 'src/dto/pagination.dto';
 import { resolveCountry } from '../constants/countries';
-import {
-  KeysetQuery,
-  KeysetRow,
-  paginateByKeyset,
-} from '../helpers/keyset-pagination.helper';
 import { AdvisorySession } from '../entities/advisory-session.entity';
 import { Business } from '../entities/business.entity';
 import { BusinessMonthlyMetric } from '../entities/business-monthly-metric.entity';
@@ -209,12 +205,44 @@ export class ClientsQueryService {
     });
   }
 
-  /** Walks rows in (updated_at, id) order; see paginateByKeyset for why. */
-  private paginate<T extends KeysetRow>(
+  /**
+   * Orders by updated_at so a consumer paging with `updatedSince` walks the
+   * change stream in order and never skips a row between pages.
+   */
+  private async paginate<T extends ObjectLiteral & { updatedAt: Date }>(
     builder: SelectQueryBuilder<T>,
     alias: string,
-    query: KeysetQuery,
+    query: { page?: number; limit?: number; updatedSince?: string },
   ): Promise<PaginatedResult<T>> {
-    return paginateByKeyset(builder, alias, query);
+    const page = query.page ?? 1;
+    const limit = query.limit ?? DEFAULT_PAGE_SIZE;
+
+    if (query.updatedSince) {
+      builder.andWhere(`${alias}.updatedAt > :updatedSince`, {
+        updatedSince: new Date(query.updatedSince),
+      });
+    }
+
+    const [data, total] = await builder
+      .orderBy(`${alias}.updatedAt`, 'ASC')
+      .addOrderBy(`${alias}.id`, 'ASC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const maxUpdatedAt = data.length
+      ? data[data.length - 1].updatedAt.toISOString()
+      : null;
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit) || 0,
+        maxUpdatedAt,
+      },
+    };
   }
 }

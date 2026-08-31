@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from transform import (
+from transform import (  # noqa: E402
     CLIENT_ACTIVITY_PARSERS,
     parse_business,
     parse_business_metric,
@@ -12,7 +12,6 @@ from transform import (
     parse_loan,
     parse_loan_repayment,
 )
-
 
 def test_parse_client_maps_camel_case_to_columns():
     raw = {
@@ -154,7 +153,7 @@ def test_parse_business_metric_requires_business_and_period():
 
 
 def test_every_client_activity_resource_has_a_parser():
-    from clients_api_client import RESOURCE_PATHS
+    from clients_api_client import RESOURCE_PATHS  # noqa: E402
 
     assert set(CLIENT_ACTIVITY_PARSERS) == set(RESOURCE_PATHS)
 

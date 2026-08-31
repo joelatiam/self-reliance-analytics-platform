@@ -48,7 +48,7 @@ See [`.env.example`](../../.env.example) at the repo root: `WORLD_BANK_*`, `UNHC
 
 ```bash
 pip install -r requirements.txt
-export POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_DB=self_reliance POSTGRES_USER=sr_app POSTGRES_PASSWORD=sr_app_pw
+export POSTGRES_HOST=localhost POSTGRES_PORT=5433 POSTGRES_DB=worldbank POSTGRES_USER=wb_app POSTGRES_PASSWORD=wb_app_pw
 python src/main.py
 ```
 
