@@ -59,7 +59,12 @@ services:
       # The base mounts ./apps/bi/plugins, which deploy.sh hard-resets. On the
       # droplet the jar lives outside the checkout, fetched by
       # deploy/provision/86-metabase-driver.sh.
-      - /var/www/production/metabase-plugins:/plugins:ro
+      #
+      # Writable, not `:ro`. Metabase copies its own bundled drivers out of the
+      # uberjar into MB_PLUGINS_DIR on every boot, so a read-only mount fails
+      # that step. The running instance has always had it read-write — the jars
+      # it extracted are sitting in the directory next to the ClickHouse one.
+      - /var/www/production/metabase-plugins:/plugins
     # Jetty stays on the base's port 3000 inside the container; only the host
     # binding changes, to loopback so nothing is reachable except through nginx.
     ports: !override
